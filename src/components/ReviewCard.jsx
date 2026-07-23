@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Edit2, Check, X, Trash2, Volume2 } from 'lucide-react';
+import { speakText } from '../utils/speechUtils';
 
 const ReviewCard = ({
   card,
@@ -11,7 +12,7 @@ const ReviewCard = ({
   onEdit,
   onDelete,
   reviewMode = 'main', // 'main' hoặc 'retry'
-  currentDeck,
+  currentDeckLanguage = 'ja-JP',
 }) => {
   const [editFront, setEditFront] = useState(card.front);
   const [editBack, setEditBack] = useState(card.back);
@@ -30,18 +31,7 @@ const ReviewCard = ({
 
   const handleSpeak = (e) => {
     e.stopPropagation();
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(card.front);
-      if (currentDeck === 'japanese') {
-        utterance.lang = 'ja-JP';
-      } else if (currentDeck === 'english') {
-        utterance.lang = 'en-US';
-      }
-      window.speechSynthesis.speak(utterance);
-    } else {
-      alert("Trình duyệt không hỗ trợ đọc văn bản.");
-    }
+    speakText(card.front, currentDeckLanguage);
   };
 
   const handleEditClick = (e) => {

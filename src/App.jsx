@@ -4,10 +4,15 @@ import { RefreshCw } from 'lucide-react';
 import ReviewCard from './components/ReviewCard';
 import './index.css'; // Premium CSS
 import ManageCards from './components/ManageCards';
+import AuthPage from './components/AuthPage'; // <--- Import trang Đăng nhập
 import QUOTES from './quotes.json';
+import { speakText, getAvailableLanguages } from './utils/speechUtils';
+import { getStreakConfig } from './utils/streakUtils';
 
 const API_URL = (import.meta.env.VITE_API_URL || '') + '/api/cards';
 const RETRY_API_URL = `${API_URL}/retry`;
+const DECK_API_URL = (import.meta.env.VITE_API_URL || '') + '/api/decks';
+const USER_API_URL = (import.meta.env.VITE_API_URL || '') + '/api/user';
 
 const isTypingTarget = (target) => {
   if (!(target instanceof HTMLElement)) return false;
@@ -18,18 +23,187 @@ const resolveStateUpdate = (nextValue, currentValue) =>
   typeof nextValue === 'function' ? nextValue(currentValue) : nextValue;
 
 function App() {
+  // --- PHẦN LOGIC ĐĂNG NHẬP ---
+  // B1: Đọc Token từ localStorage khi vừa mở app
+  const [token, setToken] = useState(() => localStorage.getItem('token') || null);
+  
+  // Biến này trả về true nếu có token, false nếu chưa có
+  const isAuthenticated = !!token; 
+
+  // Tự động gán token vào Header nếu mở app mà đã có token
+  useEffect(() => {
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
+  }, [token]);
+
+  // Hàm này được gọi khi bên file AuthPage chạy thành công
+  const handleLoginSuccess = (newToken) => {
+    // 1. Lưu token vào state để App render lại trang học
+    setToken(newToken);
+    // 2. Lưu token vào localStorage
+    localStorage.setItem('token', newToken);
+    // 3. Gắn token vào axios defaults header
+    axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+  };
+
+  // Hàm Đăng xuất
+  const handleLogout = () => {
+    // Xóa token khỏi state, localStorage và Axios header
+    setToken(null);
+    localStorage.removeItem('token');
+    delete axios.defaults.headers.common['Authorization'];
+
+    setUser(null);
+    setCards([]);
+    setDecks([]);
+    setCurrentDeck('');
+    localStorage.removeItem('currentDeck');
+  };
+  // -----------------------------
+
+  // Biến lưu thông tin User (gồm currentStreak, longestStreak...)
+  const [user, setUser] = useState(null);
+
+  const fetchUserProfile = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await axios.get(`${USER_API_URL}/me`);
+      setUser(res.data);
+    } catch (error) {
+      console.error("Lỗi lấy thông tin user:", error);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchUserProfile();
+    }
+  }, [isAuthenticated, fetchUserProfile]);
+
   const [cards, setCards] = useState([]);
   const [activeTab, setActiveTab] = useState('review'); // 'review', 'retry', 'add', 'import'
   const [newFront, setNewFront] = useState('');
   const [newBack, setNewBack] = useState('');
   
+  const [decks, setDecks] = useState([]);
+  const [newDeckName, setNewDeckName] = useState('');
+  const [newDeckLanguage, setNewDeckLanguage] = useState('ja-JP');
+  const [availableLanguages, setAvailableLanguages] = useState([]);
+  const [showAddDeck, setShowAddDeck] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // States cho tính năng đổi tên Học phần trực tiếp (Inline Rename)
+  const [editingDeckId, setEditingDeckId] = useState(null);
+  const [editingDeckName, setEditingDeckName] = useState('');
+
+  useEffect(() => {
+    const updateLangs = () => {
+      const langs = getAvailableLanguages();
+      if (langs.length > 0) {
+        setAvailableLanguages(langs);
+      }
+    };
+    updateLangs();
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = updateLangs;
+    }
+  }, []);
+
   const [currentDeck, setCurrentDeck] = useState(() => {
-    return localStorage.getItem('currentDeck') || 'japanese';
+    return localStorage.getItem('currentDeck') || '';
   });
 
   useEffect(() => {
-    localStorage.setItem('currentDeck', currentDeck);
+    if (currentDeck) {
+      localStorage.setItem('currentDeck', currentDeck);
+    }
   }, [currentDeck]);
+
+  const fetchDecks = useCallback(async () => {
+    try {
+
+      // BẠN SẼ CODE Ở ĐÂY:
+      // 1. Gọi axios.get('/api/decks')
+      const res = await axios.get(`${DECK_API_URL}`);      
+      // 2. Lưu kết quả vào state `decks` bằng hàm setDecks()
+      setDecks(res.data);
+      // 3. Nếu người dùng chưa chọn currentDeck (hoặc vừa mới vào app), hoặc mới chuyển tài khoản (currentDeck chưa đổi) 
+      // hãy tự động gán currentDeck bằng ID của Học phần đầu tiên trong mảng.
+      const isCurrentDeckValid = res.data.some(deck => deck._id === currentDeck);
+      if ((!currentDeck && res.data.length > 0) || !isCurrentDeckValid) {
+        // Lấy ra phần tử đầu tiên trong mảng, và trích xuất cái _id của nó
+        setCurrentDeck(res.data[0]._id);
+      }
+    } catch (error) {
+      console.error("Lỗi lấy danh sách học phần", error);
+    }
+  }, [currentDeck]);
+
+  const handleCreateDeck = async (e) => {
+    e.preventDefault();
+    if (!newDeckName.trim()) return;
+    try {
+      // 1. Gọi API để tạo Deck mới kèm theo language
+      await axios.post(DECK_API_URL, { deckName: newDeckName, description: '', language: newDeckLanguage });
+      
+      // 2. Tải lại danh sách ngay lập tức để Deck mới hiện lên thanh Sidebar
+      fetchDecks();
+      
+      // 3. Xóa chữ trong ô input và Đóng form lại cho gọn
+      setNewDeckName('');
+      setShowAddDeck(false);
+    } catch (error) {
+      alert("Có lỗi khi tạo học phần");
+    }
+  };
+
+  const handleStartRenameDeck = (deck) => {
+    setEditingDeckId(deck._id);
+    setEditingDeckName(deck.deckName);
+  };
+
+  const handleSaveRenameDeck = async (deckId, originalName) => {
+    if (!editingDeckName.trim() || editingDeckName.trim() === originalName) {
+      setEditingDeckId(null);
+      return;
+    }
+
+    try {
+      await axios.put(`${DECK_API_URL}/${deckId}`, { deckName: editingDeckName.trim() });
+      fetchDecks();
+    } catch (error) {
+      console.error("Lỗi sửa học phần:", error);
+      alert("Có lỗi khi đổi tên học phần");
+    } finally {
+      setEditingDeckId(null);
+    }
+  };
+
+  const handleDeleteDeck = async (deckId, deckName) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa học phần "${deckName}"?\n\n⚠️ TẤT CẢ các thẻ thuộc học phần này cũng sẽ bị xóa vĩnh viễn!`)) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${DECK_API_URL}/${deckId}`);
+      if (currentDeck === deckId) {
+        setCurrentDeck('');
+      }
+      fetchDecks();
+      if (activeTab === 'review') fetchDueCards();
+      else if (activeTab === 'retry') fetchRetryCards();
+    } catch (error) {
+      console.error("Lỗi xóa học phần:", error);
+      alert("Có lỗi khi xóa học phần");
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchDecks();
+    }
+  }, [isAuthenticated, fetchDecks]);
   
   // Quote state
   const [currentQuote, setCurrentQuote] = useState(() => QUOTES[Math.floor(Math.random() * QUOTES.length)]);
@@ -79,6 +253,7 @@ function App() {
   }, [currentCardId]);
 
   const fetchDueCards = useCallback(async () => {
+    if (!currentDeck) return;
     setLoading(true);
     setLoadError('');
     setReviewMode('main');
@@ -86,14 +261,15 @@ function App() {
       const res = await axios.get(`${API_URL}?deck=${currentDeck}`);
       setCards(res.data);
     } catch (error) {
-      console.error("Error fetching cards:", error);
+      console.error("Error fetching cards:", error.messanger);
       setLoadError('Không kết nối được backend. Hãy kiểm tra backend đang chạy ở cổng 6000.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentDeck]);
 
   const fetchRetryCards = useCallback(async () => {
+    if (!currentDeck) return;
     setLoading(true);
     setLoadError('');
     try {
@@ -106,7 +282,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentDeck]);
 
   const handleRandomQuote = useCallback(() => {
     setCurrentQuote((quote) => {
@@ -156,17 +332,29 @@ function App() {
   const handleReview = useCallback(async (id, quality) => {
     try {
       const res = await axios.put(`${API_URL}/${id}/review`, { quality });
+      const updatedCard = res.data.card || (res.data._id ? res.data : null);
+      const { newMilestone, currentStreak } = res.data;
+
       setCards((currentCards) => {
         const reviewedCard = currentCards.find(card => card._id === id);
         const remainingCards = currentCards.filter(card => card._id !== id);
 
-        if (reviewMode === 'retry' && quality === 1 && reviewedCard) {
-          return [...remainingCards, res.data?._id ? res.data : reviewedCard];
+        if (reviewMode === 'retry' && quality === 1 && (updatedCard || reviewedCard)) {
+          return [...remainingCards, updatedCard || reviewedCard];
         }
 
         return remainingCards;
       });
       setIsCardFlipped(false);
+
+      // Cập nhật streak trực tiếp lên UI (KHÔNG cần gọi fetchUserProfile thừa)
+      if (currentStreak !== undefined) {
+        setUser((prev) => (prev ? { ...prev, currentStreak } : prev));
+      }
+
+      if (newMilestone) {
+        console.log("🎉 Bạn vừa mở khóa mốc Streak mới:", newMilestone);
+      }
     } catch (error) {
       console.error("Error reviewing card:", error);
     }
@@ -208,16 +396,9 @@ function App() {
 
       if (key === 'v' && currentCard && !isCardEditing) {
         event.preventDefault();
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(currentCard.front);
-          if (currentDeck === 'japanese') {
-            utterance.lang = 'ja-JP';
-          } else if (currentDeck === 'english') {
-            utterance.lang = 'en-US';
-          }
-          window.speechSynthesis.speak(utterance);
-        }
+        const currentDeckObj = decks.find(d => d._id === currentDeck);
+        const deckLang = currentDeckObj?.language || 'ja-JP';
+        speakText(currentCard.front, deckLang);
         return;
       }
 
@@ -346,26 +527,158 @@ function App() {
     reader.readAsText(file);
   };
 
+  // MÀN HÌNH CHƯA ĐĂNG NHẬP
+  if (!isAuthenticated) {
+    return <AuthPage onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
-    <div className="app-container">
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem' }}>
+    <div className="app-wrapper">
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', marginBottom: '1rem' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.8rem' }}>Flashcard Spaced Repetition</h1>
+          <h1 style={{ margin: 0, fontSize: '1.8rem' }}>Flashcard App</h1>
           <p className="subtitle" style={{ margin: '0.5rem 0 0 0' }}>Học từ vựng hiệu quả vào đúng thời điểm</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <label style={{ color: 'white', fontWeight: 'bold' }}>Ngôn ngữ:</label>
-          <select 
-            className="form-control" 
-            style={{ width: 'auto', padding: '0.5rem', fontWeight: 'bold' }}
-            value={currentDeck}
-            onChange={(e) => setCurrentDeck(e.target.value)}
-          >
-            <option value="japanese">🇯🇵 Tiếng Nhật</option>
-            <option value="english">🇬🇧 Tiếng Anh</option>
-          </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {user && (() => {
+            const streakConfig = getStreakConfig(user.currentStreak || 0);
+            return (
+              <div 
+                className={`streak-badge ${streakConfig.badgeClass}`}
+                title={`Danh hiệu: ${streakConfig.title} | Kỷ lục: ${user.longestStreak || 0} ngày`}
+              >
+                <span className="streak-icon">{streakConfig.icon}</span>
+                <span className="streak-count">{user.currentStreak || 0}</span>
+                <span className="streak-label">ngày</span>
+              </div>
+            );
+          })()}
+          <button className="btn btn-danger" onClick={handleLogout}>Đăng xuất</button>
         </div>
       </header>
+
+      <div className="app-layout">
+        <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}>
+          {/* Nút toggle ở trên cùng bên trái */}
+          <button
+            className="sidebar-toggle-btn-top"
+            title={sidebarCollapsed ? 'Mở rộng danh sách' : 'Thu nhỏ danh sách'}
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          >
+            <span className={`sidebar-toggle-icon${sidebarCollapsed ? ' rotated' : ''}`}>‹</span>
+          </button>
+
+          <div className="sidebar-inner">
+            <div className="sidebar-header">
+              <span className="sidebar-title">Học phần</span>
+              <button 
+                className="sidebar-add-btn"
+                title="Thêm học phần mới"
+                onClick={() => setShowAddDeck(!showAddDeck)}
+              >
+                +
+              </button>
+            </div>
+
+            {/* Form tạo học phần mới */}
+            {showAddDeck && (
+              <form onSubmit={handleCreateDeck} className="sidebar-add-form">
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  placeholder="Tên học phần (VD: IELTS)..."
+                  value={newDeckName}
+                  onChange={(e) => setNewDeckName(e.target.value)}
+                />
+                <select
+                  className="form-control"
+                  value={newDeckLanguage}
+                  onChange={(e) => setNewDeckLanguage(e.target.value)}
+                  style={{ padding: '0.5rem', fontSize: '0.85rem' }}
+                >
+                  {availableLanguages.length > 0 ? (
+                    availableLanguages.map((lang) => (
+                      <option key={lang.code} value={lang.code}>
+                        {lang.name}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="ja-JP">ja-JP (Tiếng Nhật)</option>
+                      <option value="en-US">en-US (Tiếng Anh)</option>
+                      <option value="zh-CN">zh-CN (Tiếng Trung)</option>
+                      <option value="vi-VN">vi-VN (Tiếng Việt)</option>
+                      <option value="ko-KR">ko-KR (Tiếng Hàn)</option>
+                    </>
+                  )}
+                </select>
+                <button type="submit" className="btn btn-success" style={{ width: '100%', padding: '0.5rem' }}>Lưu</button>
+              </form>
+            )}
+
+            {/* Danh sách Học phần */}
+            <div className="deck-list">
+              {decks.length === 0 ? (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', padding: '0.5rem' }}>Chưa có học phần nào</p>
+              ) : (
+                decks.map((deck) => (
+                  editingDeckId === deck._id ? (
+                    <div key={deck._id} className="deck-item-container active" style={{ padding: '0.3rem 0.4rem' }}>
+                      <input
+                        type="text"
+                        className="form-control deck-rename-input"
+                        value={editingDeckName}
+                        onChange={(e) => setEditingDeckName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.target.blur();
+                          }
+                          if (e.key === 'Escape') {
+                            setEditingDeckId(null);
+                          }
+                        }}
+                        onBlur={() => handleSaveRenameDeck(deck._id, deck.deckName)}
+                        autoFocus
+                        onFocus={(e) => e.target.select()}
+                      />
+                    </div>
+                  ) : (
+                    <div 
+                      key={deck._id} 
+                      className={`deck-item-container ${currentDeck === deck._id ? 'active' : ''}`}
+                    >
+                      <button 
+                        className="deck-item-btn"
+                        onClick={() => setCurrentDeck(deck._id)}
+                      >
+                        {deck.deckName}
+                      </button>
+                      <div className="deck-actions">
+                        <button 
+                          className="deck-action-btn"
+                          title="Sửa học phần"
+                          onClick={(e) => { e.stopPropagation(); handleStartRenameDeck(deck); }}
+                        >
+                          ✎
+                        </button>
+                        <button 
+                          className="deck-action-btn delete"
+                          title="Xóa học phần (kèm xóa tất cả thẻ)"
+                          onClick={(e) => { e.stopPropagation(); handleDeleteDeck(deck._id, deck.deckName); }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  )
+                ))
+              )}
+            </div>
+          </div>
+        </aside>
+
+        {/* ================= CỘT PHẢI (MAIN CONTENT) ================= */}
+        <div className="main-content">
 
       <div className="nav-tabs">
         <button 
@@ -524,7 +837,7 @@ function App() {
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                   reviewMode={reviewMode}
-                  currentDeck={currentDeck}
+                  currentDeckLanguage={decks.find(d => d._id === currentDeck)?.language || 'ja-JP'}
                 />
                 
                 {/* Quote Section */}
@@ -660,7 +973,9 @@ function App() {
           </div>
         </div>
       )}
-    </div>
+        </div> {/* Đóng main-content */}
+      </div> {/* Đóng app-layout */}
+    </div> // Đóng app-wrapper
   );
 }
 
