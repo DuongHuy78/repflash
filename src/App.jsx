@@ -128,12 +128,15 @@ function App() {
       const res = await axios.get(`${DECK_API_URL}`);      
       // 2. Lưu kết quả vào state `decks` bằng hàm setDecks()
       setDecks(res.data);
-      // 3. Nếu người dùng chưa chọn currentDeck (hoặc vừa mới vào app), hoặc mới chuyển tài khoản (currentDeck chưa đổi) 
-      // hãy tự động gán currentDeck bằng ID của Học phần đầu tiên trong mảng.
-      const isCurrentDeckValid = res.data.some(deck => deck._id === currentDeck);
-      if ((!currentDeck && res.data.length > 0) || !isCurrentDeckValid) {
-        // Lấy ra phần tử đầu tiên trong mảng, và trích xuất cái _id của nó
-        setCurrentDeck(res.data[0]._id);
+      if (res.data.length > 0) {
+        const isCurrentDeckValid = res.data.some(deck => deck._id === currentDeck);
+        if (!currentDeck || !isCurrentDeckValid) {
+          setCurrentDeck(res.data[0]._id);
+        }
+      } else {
+        // Nếu tài khoản mới chưa có học phần nào
+        setCurrentDeck('');
+        setLoading(false); // Tắt loading để giao diện hiển thị trạng thái rỗng
       }
     } catch (error) {
       console.error("Lỗi lấy danh sách học phần", error);
@@ -253,7 +256,11 @@ function App() {
   }, [currentCardId]);
 
   const fetchDueCards = useCallback(async () => {
-    if (!currentDeck) return;
+    if (!currentDeck) {
+      setCards([]);
+      setLoading(false); 
+      return;
+    }
     setLoading(true);
     setLoadError('');
     setReviewMode('main');
