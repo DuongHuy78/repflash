@@ -8,6 +8,7 @@ import AuthPage from './components/AuthPage'; // <--- Import trang Đăng nhập
 import QUOTES from './quotes.json';
 import { speakText, getAvailableLanguages } from './utils/speechUtils';
 import { getStreakConfig } from './utils/streakUtils';
+import HelpModal from './components/HelpModal';
 
 const API_URL = (import.meta.env.VITE_API_URL || '') + '/api/cards';
 const RETRY_API_URL = `${API_URL}/retry`;
@@ -64,6 +65,7 @@ function App() {
 
   // Biến lưu thông tin User (gồm currentStreak, longestStreak...)
   const [user, setUser] = useState(null);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   const fetchUserProfile = useCallback(async () => {
     if (!token) return;
@@ -561,6 +563,13 @@ function App() {
             );
           })()}
           <button className="btn btn-danger" onClick={handleLogout}>Đăng xuất</button>
+          <button 
+            className="help-icon-btn" 
+            title="Hướng dẫn sử dụng & Thuật toán SM-2"
+            onClick={() => setShowHelpModal(true)}
+          >
+            ?
+          </button>
         </div>
       </header>
 
@@ -982,6 +991,9 @@ function App() {
       )}
         </div> {/* Đóng main-content */}
       </div> {/* Đóng app-layout */}
+
+      {/* Popup Hướng dẫn sử dụng & Thuật toán SM-2 */}
+      <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
     </div> // Đóng app-wrapper
   );
 }
