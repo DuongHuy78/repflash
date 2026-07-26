@@ -63,6 +63,39 @@ const HelpModal = ({ isOpen, onClose }) => {
             </p>
           </section>
 
+          {/* Section 5: Keyboard Shortcuts */}
+          <section className="help-section">
+            <h3>⌨️ 5. Phím tắt thao tác nhanh (Keyboard Shortcuts)</h3>
+            <p>Tăng tốc độ học gấp 3 lần mà không cần dùng chuột:</p>
+            <div className="shortcuts-grid">
+              <div className="shortcut-item">
+                <kbd>Space</kbd> <span>Lật mặt trước / mặt sau thẻ</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>A</kbd> <span>Đánh giá 1 - Lại (Again)</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>S</kbd> <span>Đánh giá 2 - Khó (Hard)</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>D</kbd> <span>Đánh giá 3 - Tốt (Good)</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>F</kbd> <span>Đánh giá 4 - Dễ (Easy)</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>V</kbd> <span>Phát âm từ vựng (Voice)</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>R</kbd> <span>Đổi câu danh ngôn cổ vũ</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>Esc</kbd> <span>Thoát chế độ sửa thẻ</span>
+              </div>
+            </div>
+          </section>
+
+
           {/* Section 5: VIP Note
           <section className="help-section vip-note">
             <h3><Crown size={20} color="#f59e0b" style={{ verticalAlign: 'middle', marginRight: '6px' }} /> 5. Lời nhắn & Bản VIP Thân Thiện</h3>

@@ -935,3 +935,40 @@ h1 {
   justify-content: flex-end;
 }
 
+/* Shortcuts Grid & Kbd Styling */
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+kbd {
+  background: var(--bg-tertiary, #2a2d3d);
+  color: var(--primary-color, #6366f1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.75rem;
+  min-width: 24px;
+  text-align: center;
+  display: inline-block;
+}
+
+
