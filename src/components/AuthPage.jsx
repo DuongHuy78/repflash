@@ -1,151 +1,271 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 
 const API_URL = (import.meta.env.VITE_API_URL || '') + '/api/user';
 
+const getResetTokenFromUrl = () => {
+  if (window.location.pathname !== '/reset-password') return '';
+  return new URLSearchParams(window.location.search).get('token') || '';
+};
+
+const getErrorMessage = (error) => {
+  const responseData = error.response?.data;
+  if (typeof responseData === 'string') return responseData;
+  return responseData?.message || error.message || 'Có lỗi xảy ra, vui lòng thử lại.';
+};
+
 const AuthPage = ({ onLoginSuccess }) => {
-  const [isLoginTab, setIsLoginTab] = useState(true);
-  // Lấy múi giờ thiết bị (VD: "Asia/Ho_Chi_Minh")
+  const [resetToken] = useState(getResetTokenFromUrl);
+  const [authMode, setAuthMode] = useState(() =>
+    window.location.pathname === '/reset-password' ? 'reset' : 'login'
+  );
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  
-  // Các biến State (Trạng thái) lưu trữ dữ liệu người dùng nhập
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [email, setEmail] = useState(''); // Chỉ dùng khi đăng ký
-  
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [email, setEmail] = useState('');
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // TODO: Bạn hãy viết logic kết nối API vào hàm này
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Token chỉ cần tồn tại trong state khi user đang đặt lại mật khẩu.
+  useEffect(() => {
+    if (authMode === 'reset' && resetToken) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, [authMode, resetToken]);
+
+  const changeAuthMode = (nextMode) => {
+    setAuthMode(nextMode);
     setError('');
+    setSuccessMessage('');
+    setPassword('');
+    setConfirmPassword('');
+
+    if (nextMode !== 'reset') {
+      window.history.replaceState(null, '', '/');
+    }
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError('');
+    setSuccessMessage('');
     setIsLoading(true);
 
     try {
-      if (isLoginTab) {
-        // [MẪU LOGIC ĐĂNG NHẬP]
-        // 1. Gọi API gửi username, password
-        const res = await axios.post(`${API_URL}/login`, { username, password, timezone: userTimezone });
-        
-        // 2. Lấy token từ kết quả trả về (trong res.data có chứa userInfo.token)
-        const token = res.data.token;
-        
-        // 3. Gọi hàm báo cáo lên App.jsx kèm theo cái token đó
-        onLoginSuccess(token);
+      if (authMode === 'login') {
+        const response = await axios.post(`${API_URL}/login`, {
+          username,
+          password,
+          timezone: userTimezone,
+        });
 
-      } else {
-        console.log("Vào đăng ký");
-        // [MẪU LOGIC ĐĂNG KÝ]
-        // 1. Gọi API gửi username, password, email
-        await axios.post(`${API_URL}/register`, { username, password, email, timezone: userTimezone  });
-        
-        // 2. Báo thành công và chuyển sang form đăng nhập
-        alert('Đăng ký thành công! Hãy đăng nhập nhé.');
-        setIsLoginTab(true);
-        setIsLoading(false);
+        onLoginSuccess(response.data.token);
+        return;
       }
+
+      if (authMode === 'register') {
+        await axios.post(`${API_URL}/register`, {
+          username,
+          password,
+          email,
+          timezone: userTimezone,
+        });
+
+        setSuccessMessage('Đăng ký thành công! Hãy đăng nhập nhé.');
+        setAuthMode('login');
+        setPassword('');
+        return;
+      }
+
+      if (authMode === 'forgot') {
+        await axios.post(`${API_URL}/forgot-password`, { email });
+        setSuccessMessage(
+          'Nếu email tồn tại, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu.'
+        );
+        return;
+      }
+
+      if (!resetToken) {
+        throw new Error('Link đặt lại mật khẩu không hợp lệ.');
+      }
+
+      if (password !== confirmPassword) {
+        throw new Error('Hai mật khẩu mới chưa khớp nhau.');
+      }
+
+      await axios.put(`${API_URL}/reset-password`, {
+        token: resetToken,
+        newPassword: password,
+      });
+
+      window.history.replaceState(null, '', '/');
+      setAuthMode('login');
+      setPassword('');
+      setConfirmPassword('');
+      setSuccessMessage('Đặt lại mật khẩu thành công. Hãy đăng nhập lại.');
     } catch (err) {
-      // 3. Nếu API báo lỗi, lấy thông báo lỗi từ Backend để hiển thị
-      setError(err.response?.data || 'Có lỗi xảy ra, vui lòng thử lại.');
-      console.log(err.response?.data || err.message);
+      setError(getErrorMessage(err));
+    } finally {
       setIsLoading(false);
     }
   };
 
+  const isLoginTab = authMode === 'login';
+  const isRegisterTab = authMode === 'register';
+  const isForgotPassword = authMode === 'forgot';
+  const isResetPassword = authMode === 'reset';
+
+  const title = isForgotPassword
+    ? 'Quên mật khẩu'
+    : isResetPassword
+      ? 'Đặt lại mật khẩu'
+      : 'Flashcard App';
+
+  const subtitle = isForgotPassword
+    ? 'Nhập email đã đăng ký để nhận hướng dẫn đặt lại mật khẩu.'
+    : isResetPassword
+      ? 'Tạo mật khẩu mới cho tài khoản của bạn.'
+      : 'Học từ vựng hiệu quả vào đúng thời điểm';
+
+  const submitLabel = isLoading
+    ? 'Đang xử lý...'
+    : isForgotPassword
+      ? 'Gửi link đặt lại mật khẩu'
+      : isResetPassword
+        ? 'Đặt lại mật khẩu'
+        : isLoginTab
+          ? 'Vào Học Ngay 🚀'
+          : 'Tạo Tài Khoản Mới ✨';
+
   return (
     <div className="auth-container">
       <div className="glass-card auth-card">
-        
-        {/* Phần Tiêu đề */}
         <div className="auth-header">
-          <h2>Flashcard App</h2>
-          <p>Học từ vựng hiệu quả vào đúng thời điểm</p>
+          <h2>{title}</h2>
+          <p>{subtitle}</p>
         </div>
 
-        {/* Nút Chuyển đổi Đăng nhập / Đăng ký */}
-        <div className="auth-tabs">
-          <button 
-            className={`auth-tab-btn ${isLoginTab ? 'active' : ''}`}
-            onClick={() => {
-              setIsLoginTab(true);
-              setError('');
-            }}
-          >
-            Đăng Nhập
-          </button>
-          <button 
-            className={`auth-tab-btn ${!isLoginTab ? 'active' : ''}`}
-            onClick={() => {
-              setIsLoginTab(false);
-              setError('');
-            }}
-          >
-            Đăng Ký
-          </button>
-        </div>
+        {!isForgotPassword && !isResetPassword && (
+          <div className="auth-tabs">
+            <button
+              type="button"
+              className={`auth-tab-btn ${isLoginTab ? 'active' : ''}`}
+              onClick={() => changeAuthMode('login')}
+            >
+              Đăng Nhập
+            </button>
+            <button
+              type="button"
+              className={`auth-tab-btn ${isRegisterTab ? 'active' : ''}`}
+              onClick={() => changeAuthMode('register')}
+            >
+              Đăng Ký
+            </button>
+          </div>
+        )}
 
-        {/* Hiển thị lỗi (nếu có) */}
         {error && (
           <div className="auth-error">
             <span>⚠️</span> {error}
           </div>
         )}
 
-        {/* Form nhập liệu */}
-        <form className="auth-form" onSubmit={handleSubmit}>
-          
-          <div className="auth-form-group">
-            <label>Tên đăng nhập</label>
-            <input 
-              type="text" 
-              className="form-control" 
-              placeholder="Nhập username..."
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
+        {successMessage && (
+          <div className="auth-success">
+            <span>✓</span> {successMessage}
           </div>
+        )}
 
-          {!isLoginTab && (
+        <form className="auth-form" onSubmit={handleSubmit}>
+          {!isForgotPassword && !isResetPassword && (
             <div className="auth-form-group">
-              <label>Email</label>
-              <input 
-                type="email" 
-                className="form-control" 
-                placeholder="Nhập email của bạn..."
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+              <label>Tên đăng nhập</label>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Nhập username..."
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
                 required
               />
             </div>
           )}
 
-          <div className="auth-form-group">
-            <label>Mật khẩu</label>
-            <input 
-              type="password" 
-              className="form-control" 
-              placeholder="Nhập mật khẩu..."
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
+          {(isRegisterTab || isForgotPassword) && (
+            <div className="auth-form-group">
+              <label>Email</label>
+              <input
+                type="email"
+                className="form-control"
+                placeholder="Nhập email của bạn..."
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+              />
+            </div>
+          )}
 
-          <button 
-            type="submit" 
+          {!isForgotPassword && (
+            <div className="auth-form-group">
+              <label>{isResetPassword ? 'Mật khẩu mới' : 'Mật khẩu'}</label>
+              <input
+                type="password"
+                className="form-control"
+                placeholder={isResetPassword ? 'Ít nhất 8 ký tự...' : 'Nhập mật khẩu...'}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                minLength={isResetPassword ? 8 : undefined}
+                required
+              />
+            </div>
+          )}
+
+          {isResetPassword && (
+            <div className="auth-form-group">
+              <label>Nhập lại mật khẩu mới</label>
+              <input
+                type="password"
+                className="form-control"
+                placeholder="Nhập lại mật khẩu mới..."
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                minLength="8"
+                required
+              />
+            </div>
+          )}
+
+          <button
+            type="submit"
             className="btn btn-primary auth-submit-btn"
             disabled={isLoading}
           >
-            {isLoading 
-              ? 'Đang xử lý...' 
-              : (isLoginTab ? 'Vào Học Ngay 🚀' : 'Tạo Tài Khoản Mới ✨')
-            }
+            {submitLabel}
           </button>
 
-        </form>
+          {isLoginTab && (
+            <button
+              type="button"
+              className="auth-link-button"
+              onClick={() => changeAuthMode('forgot')}
+            >
+              Quên mật khẩu?
+            </button>
+          )}
 
+          {(isForgotPassword || isResetPassword) && (
+            <button
+              type="button"
+              className="auth-link-button"
+              onClick={() => changeAuthMode('login')}
+            >
+              Quay lại đăng nhập
+            </button>
+          )}
+        </form>
       </div>
     </div>
   );
