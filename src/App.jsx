@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, UserRound } from 'lucide-react';
 import ReviewCard from './components/ReviewCard';
 import './index.css'; // Premium CSS
 import ManageCards from './components/ManageCards';
@@ -9,6 +9,7 @@ import QUOTES from './quotes.json';
 import { speakText, getAvailableLanguages } from './utils/speechUtils';
 import { getStreakConfig } from './utils/streakUtils';
 import HelpModal from './components/HelpModal';
+import ProfileModal from './components/ProfileModal';
 
 const API_URL = (import.meta.env.VITE_API_URL || '') + '/api/cards';
 const RETRY_API_URL = `${API_URL}/retry`;
@@ -66,6 +67,35 @@ function App() {
   // Biến lưu thông tin User (gồm currentStreak, longestStreak...)
   const [user, setUser] = useState(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const profileButtonRef = useRef(null);
+
+  const closeProfileModal = () => {
+    setShowProfileModal(false);
+  };
+
+  const handleProfileSave = async (profileData) => {
+    // TODO: Bạn tự kết nối API cập nhật hồ sơ tại đây.
+    // Gợi ý luồng sau khi API sẵn sàng:
+    // 1. Gọi PUT `${USER_API_URL}/me` với body là profileData.
+    // 2. Gộp user trả về vào state bằng setUser.
+    // 3. Return user đã cập nhật để ProfileModal hiển thị trạng thái thành công.
+
+    try {
+      const res = await axios.put(`${USER_API_URL}/me`, profileData);
+      const updatedUser = res.data.user;
+      setUser((currentUser) => ({
+        ...currentUser,
+        ...updatedUser,
+      }));
+      return updatedUser
+    } catch (error) {
+      console.error("Lỗi lấy thông tin user:", error);
+      throw new Error(
+        'Không thể cập nhật thông tin tài khoản.'
+      );
+    }
+  };
 
   const fetchUserProfile = useCallback(async () => {
     if (!token) return;
@@ -543,12 +573,12 @@ function App() {
 
   return (
     <div className="app-wrapper">
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', marginBottom: '1rem' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '1.8rem' }}>Flashcard App</h1>
-          <p className="subtitle" style={{ margin: '0.5rem 0 0 0' }}>Học từ vựng hiệu quả vào đúng thời điểm</p>
+      <header className="app-header">
+        <div className="app-brand">
+          <h1>Flashcard App</h1>
+          <p className="subtitle">Học từ vựng hiệu quả vào đúng thời điểm</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div className="app-header-actions">
           {user && (() => {
             const streakConfig = getStreakConfig(user.currentStreak || 0);
             return (
@@ -562,10 +592,24 @@ function App() {
               </div>
             );
           })()}
-          <button className="btn btn-danger" onClick={handleLogout}>Đăng xuất</button>
+          {user && (
+            <button
+              ref={profileButtonRef}
+              type="button"
+              className="profile-trigger"
+              onClick={() => setShowProfileModal(true)}
+              aria-haspopup="dialog"
+              aria-expanded={showProfileModal}
+            >
+              <UserRound size={18} aria-hidden="true" />
+              <span>{user.username}</span>
+            </button>
+          )}
           <button 
+            type="button"
             className="help-icon-btn" 
             title="Hướng dẫn sử dụng & Thuật toán SM-2"
+            aria-label="Mở hướng dẫn sử dụng"
             onClick={() => setShowHelpModal(true)}
           >
             ?
@@ -994,6 +1038,16 @@ function App() {
 
       {/* Popup Hướng dẫn sử dụng & Thuật toán SM-2 */}
       <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
+
+      {showProfileModal && user && (
+        <ProfileModal
+          user={user}
+          onClose={closeProfileModal}
+          onSave={handleProfileSave}
+          onLogout={handleLogout}
+          returnFocusRef={profileButtonRef}
+        />
+      )}
     </div> // Đóng app-wrapper
   );
 }
