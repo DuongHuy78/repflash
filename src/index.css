@@ -1243,6 +1243,81 @@ kbd {
   line-height: 1.5;
 }
 
+.profile-security {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--glass-border);
+}
+
+.profile-security h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.profile-security p {
+  margin-top: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.profile-security__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.profile-password-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.profile-password-notice > span {
+  color: var(--warning);
+  font-weight: 700;
+}
+
+.profile-password-notice strong {
+  color: var(--text-primary);
+}
+
+.profile-password-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.profile-password-input .form-control {
+  min-width: 0;
+}
+
+.profile-password-toggle {
+  flex: 0 0 auto;
+  min-width: 52px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.profile-password-toggle:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.09);
+}
+
 .profile-form__status {
   min-height: 1.2rem;
 }
@@ -1372,6 +1447,11 @@ kbd {
   }
 
   .profile-logout-btn {
+    min-height: 46px;
+    width: 100%;
+  }
+
+  .profile-password-actions .btn {
     min-height: 46px;
     width: 100%;
   }

@@ -14,7 +14,7 @@ const getErrorMessage = (error) => {
   return responseData?.message || error.message || 'Có lỗi xảy ra, vui lòng thử lại.';
 };
 
-const AuthPage = ({ onLoginSuccess }) => {
+const AuthPage = ({ onLoginSuccess, initialSuccessMessage = '' }) => {
   const [resetToken] = useState(getResetTokenFromUrl);
   const [authMode, setAuthMode] = useState(() =>
     window.location.pathname === '/reset-password' ? 'reset' : 'login'
@@ -26,7 +26,7 @@ const AuthPage = ({ onLoginSuccess }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState(initialSuccessMessage);
   const [isLoading, setIsLoading] = useState(false);
 
   // Token chỉ cần tồn tại trong state khi user đang đặt lại mật khẩu.

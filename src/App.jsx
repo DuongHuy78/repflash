@@ -28,6 +28,7 @@ function App() {
   // --- PHẦN LOGIC ĐĂNG NHẬP ---
   // B1: Đọc Token từ localStorage khi vừa mở app
   const [token, setToken] = useState(() => localStorage.getItem('token') || null);
+  const [authMessage, setAuthMessage] = useState('');
   
   // Biến này trả về true nếu có token, false nếu chưa có
   const isAuthenticated = !!token; 
@@ -47,6 +48,7 @@ function App() {
     localStorage.setItem('token', newToken);
     // 3. Gắn token vào axios defaults header
     axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+    setAuthMessage('');
   };
 
   // Hàm Đăng xuất
@@ -57,6 +59,8 @@ function App() {
     delete axios.defaults.headers.common['Authorization'];
 
     setUser(null);
+    setShowProfileModal(false);
+    setShowHelpModal(false);
     setCards([]);
     setDecks([]);
     setCurrentDeck('');
@@ -92,8 +96,23 @@ function App() {
     } catch (error) {
       console.error("Lỗi lấy thông tin user:", error);
       throw new Error(
-        'Không thể cập nhật thông tin tài khoản.'
+        'Không thể cập nhật thông tin tài khoản.',
+        { cause: error }
       );
+    }
+  };
+
+  const handlePasswordChange = async (passwordData) => {
+    try {
+      await axios.put(`${USER_API_URL}/me/password`, passwordData);
+      setAuthMessage('Mật khẩu đã được cập nhật. Hãy đăng nhập lại.');
+      handleLogout();
+    } catch (error) {
+      const responseData = error.response?.data;
+      const message = typeof responseData === 'string'
+        ? responseData
+        : responseData?.message || error.message || 'Không thể đổi mật khẩu. Vui lòng thử lại.';
+      throw new Error(message, { cause: error });
     }
   };
 
@@ -568,7 +587,7 @@ function App() {
 
   // MÀN HÌNH CHƯA ĐĂNG NHẬP
   if (!isAuthenticated) {
-    return <AuthPage onLoginSuccess={handleLoginSuccess} />;
+    return <AuthPage onLoginSuccess={handleLoginSuccess} initialSuccessMessage={authMessage} />;
   }
 
   return (
@@ -1044,6 +1063,7 @@ function App() {
           user={user}
           onClose={closeProfileModal}
           onSave={handleProfileSave}
+          onChangePassword={handlePasswordChange}
           onLogout={handleLogout}
           returnFocusRef={profileButtonRef}
         />
