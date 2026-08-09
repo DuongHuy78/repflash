@@ -29,6 +29,15 @@ function App() {
   // B1: Đọc Token từ localStorage khi vừa mở app
   const [token, setToken] = useState(() => localStorage.getItem('token') || null);
   const [authMessage, setAuthMessage] = useState('');
+  const [authErrorMessage, setAuthErrorMessage] = useState('');
+  const [user, setUser] = useState(null);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [cards, setCards] = useState([]);
+  const [decks, setDecks] = useState([]);
+  const [currentDeck, setCurrentDeck] = useState(() => {
+    return localStorage.getItem('currentDeck') || '';
+  });
   
   // Biến này trả về true nếu có token, false nếu chưa có
   const isAuthenticated = !!token; 
@@ -37,6 +46,8 @@ function App() {
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } else {
+      delete axios.defaults.headers.common['Authorization'];
     }
   }, [token]);
 
@@ -49,10 +60,11 @@ function App() {
     // 3. Gắn token vào axios defaults header
     axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
     setAuthMessage('');
+    setAuthErrorMessage('');
   };
 
-  // Hàm Đăng xuất
-  const handleLogout = () => {
+  // Xóa toàn bộ dữ liệu phụ thuộc vào phiên đăng nhập.
+  const clearSession = useCallback(() => {
     // Xóa token khỏi state, localStorage và Axios header
     setToken(null);
     localStorage.removeItem('token');
@@ -65,13 +77,44 @@ function App() {
     setDecks([]);
     setCurrentDeck('');
     localStorage.removeItem('currentDeck');
-  };
+  }, []);
+
+  // Hàm Đăng xuất do người dùng chủ động bấm.
+  const handleLogout = useCallback(() => {
+    setAuthMessage('');
+    setAuthErrorMessage('');
+    clearSession();
+  }, [clearSession]);
+
+  // Nếu backend từ chối JWT (hết hạn, sai tokenVersion hoặc user không còn),
+  // tự xóa phiên để App render lại AuthPage thay vì giữ giao diện bị kẹt.
+  useEffect(() => {
+    const responseInterceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        const status = error.response?.status;
+        const hasStoredToken = Boolean(localStorage.getItem('token'));
+
+        if (hasStoredToken && (status === 401 || status === 403)) {
+          const responseData = error.response?.data;
+          const message = typeof responseData === 'string'
+            ? responseData
+            : responseData?.message || 'Phiên đăng nhập đã hết hiệu lực. Vui lòng đăng nhập lại.';
+
+          clearSession();
+          setAuthMessage('');
+          setAuthErrorMessage(message);
+        }
+
+        return Promise.reject(error);
+      }
+    );
+
+    return () => axios.interceptors.response.eject(responseInterceptor);
+  }, [clearSession]);
   // -----------------------------
 
   // Biến lưu thông tin User (gồm currentStreak, longestStreak...)
-  const [user, setUser] = useState(null);
-  const [showHelpModal, setShowHelpModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const profileButtonRef = useRef(null);
 
   const closeProfileModal = () => {
@@ -79,8 +122,6 @@ function App() {
   };
 
   const handleProfileSave = async (profileData) => {
-    // TODO: Bạn tự kết nối API cập nhật hồ sơ tại đây.
-    // Gợi ý luồng sau khi API sẵn sàng:
     // 1. Gọi PUT `${USER_API_URL}/me` với body là profileData.
     // 2. Gộp user trả về vào state bằng setUser.
     // 3. Return user đã cập nhật để ProfileModal hiển thị trạng thái thành công.
@@ -105,8 +146,9 @@ function App() {
   const handlePasswordChange = async (passwordData) => {
     try {
       await axios.put(`${USER_API_URL}/me/password`, passwordData);
+      clearSession();
+      setAuthErrorMessage('');
       setAuthMessage('Mật khẩu đã được cập nhật. Hãy đăng nhập lại.');
-      handleLogout();
     } catch (error) {
       const responseData = error.response?.data;
       const message = typeof responseData === 'string'
@@ -132,12 +174,10 @@ function App() {
     }
   }, [isAuthenticated, fetchUserProfile]);
 
-  const [cards, setCards] = useState([]);
   const [activeTab, setActiveTab] = useState('review'); // 'review', 'retry', 'add', 'import'
   const [newFront, setNewFront] = useState('');
   const [newBack, setNewBack] = useState('');
   
-  const [decks, setDecks] = useState([]);
   const [newDeckName, setNewDeckName] = useState('');
   const [newDeckLanguage, setNewDeckLanguage] = useState('ja-JP');
   const [availableLanguages, setAvailableLanguages] = useState([]);
@@ -160,10 +200,6 @@ function App() {
       window.speechSynthesis.onvoiceschanged = updateLangs;
     }
   }, []);
-
-  const [currentDeck, setCurrentDeck] = useState(() => {
-    return localStorage.getItem('currentDeck') || '';
-  });
 
   useEffect(() => {
     if (currentDeck) {
@@ -587,7 +623,13 @@ function App() {
 
   // MÀN HÌNH CHƯA ĐĂNG NHẬP
   if (!isAuthenticated) {
-    return <AuthPage onLoginSuccess={handleLoginSuccess} initialSuccessMessage={authMessage} />;
+    return (
+      <AuthPage
+        onLoginSuccess={handleLoginSuccess}
+        initialSuccessMessage={authMessage}
+        initialErrorMessage={authErrorMessage}
+      />
+    );
   }
 
   return (
