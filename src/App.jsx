@@ -18,7 +18,7 @@ const USER_API_URL = (import.meta.env.VITE_API_URL || '') + '/api/user';
 
 const isTypingTarget = (target) => {
   if (!(target instanceof HTMLElement)) return false;
-  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(target.tagName);
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 };
 
 const resolveStateUpdate = (nextValue, currentValue) =>
