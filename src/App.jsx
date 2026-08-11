@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { RefreshCw, UserRound } from 'lucide-react';
+import { BookOpen, LibraryBig, Plus, RefreshCw, RotateCcw, UserRound, X } from 'lucide-react';
 import ReviewCard from './components/ReviewCard';
 import './index.css'; // Premium CSS
 import ManageCards from './components/ManageCards';
+import AddCardsPanel from './components/AddCardsPanel';
 import AuthPage from './components/AuthPage'; // <--- Import trang Đăng nhập
 import QUOTES from './quotes.json';
 import { speakText, getAvailableLanguages } from './utils/speechUtils';
@@ -174,15 +175,15 @@ function App() {
     }
   }, [isAuthenticated, fetchUserProfile]);
 
-  const [activeTab, setActiveTab] = useState('review'); // 'review', 'retry', 'add', 'import'
-  const [newFront, setNewFront] = useState('');
-  const [newBack, setNewBack] = useState('');
+  const [activeTab, setActiveTab] = useState('review'); // 'review', 'retry', 'manage', 'add'
+  const [addMode, setAddMode] = useState('manual');
   
   const [newDeckName, setNewDeckName] = useState('');
   const [newDeckLanguage, setNewDeckLanguage] = useState('ja-JP');
   const [availableLanguages, setAvailableLanguages] = useState([]);
   const [showAddDeck, setShowAddDeck] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isDeckDrawerOpen, setIsDeckDrawerOpen] = useState(false);
 
   // States cho tính năng đổi tên Học phần trực tiếp (Inline Rename)
   const [editingDeckId, setEditingDeckId] = useState(null);
@@ -298,13 +299,6 @@ function App() {
   // Quote state
   const [currentQuote, setCurrentQuote] = useState(() => QUOTES[Math.floor(Math.random() * QUOTES.length)]);
 
-  // Import states
-  const [importText, setImportText] = useState('');
-  const [separator, setSeparator] = useState('-');
-  const [importLoading, setImportLoading] = useState(false);
-  const [previewCards, setPreviewCards] = useState([]);
-  const [showImportPreview, setShowImportPreview] = useState(false);
-
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [cardUiState, setCardUiState] = useState({ cardId: null, isFlipped: false, isEditing: false });
@@ -407,21 +401,10 @@ function App() {
     fetchRetryCards();
   }, [fetchRetryCards]);
 
-  const handleAddCard = async (e) => {
-    e.preventDefault();
-    if (!newFront || !newBack) return;
-
-    try {
-      await axios.post(API_URL, { front: newFront, back: newBack, deck: currentDeck });
-      setNewFront('');
-      setNewBack('');
-      alert('Đã thêm thẻ thành công!');
-      fetchDueCards(); // Refresh list if we want to immediately see it (if it's due)
-    } catch (error) {
-      console.error("Error adding card:", error);
-      alert('Có lỗi xảy ra khi thêm thẻ.');
-    }
-  };
+  const openAddTab = useCallback((mode = 'manual') => {
+    setAddMode(mode);
+    setActiveTab('add');
+  }, []);
 
   const handleReview = useCallback(async (id, quality) => {
     try {
@@ -559,68 +542,6 @@ function App() {
     }
   };
 
-  const handleImport = async () => {
-    if (!importText.trim()) return;
-    
-    const lines = importText.split('\n');
-    const newCards = [];
-
-    lines.forEach(line => {
-      // Bỏ qua dòng trống
-      if (!line.trim()) return;
-      
-      const parts = line.split(separator);
-      if (parts.length >= 2) {
-        newCards.push({
-          front: parts[0].trim(),
-          back: parts.slice(1).join(separator).trim() // Gom lại các phần sau nếu có chứa ký tự separator
-        });
-      }
-    });
-
-    if (newCards.length === 0) {
-      alert('Không tìm thấy thẻ hợp lệ nào. Vui lòng kiểm tra lại cấu trúc và dấu phân cách.');
-      return;
-    }
-
-    setPreviewCards(newCards);
-    setShowImportPreview(true);
-  };
-
-  const confirmImport = async () => {
-    setImportLoading(true);
-    try {
-      const res = await axios.post(`${API_URL}/bulk`, { cards: previewCards, deck: currentDeck });
-      alert(`Đã thêm thành công ${res.data.count} thẻ!`);
-      setImportText('');
-      fetchDueCards();
-      setActiveTab('review');
-      setShowImportPreview(false);
-      setPreviewCards([]);
-    } catch (error) {
-      console.error("Error importing cards:", error);
-      alert('Có lỗi xảy ra khi import thẻ.');
-    }
-    setImportLoading(false);
-  };
-
-  const handlePreviewCardChange = (index, field, value) => {
-    const newCards = [...previewCards];
-    newCards[index] = { ...newCards[index], [field]: value };
-    setPreviewCards(newCards);
-  };
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setImportText(event.target.result);
-    };
-    reader.readAsText(file);
-  };
-
   // MÀN HÌNH CHƯA ĐĂNG NHẬP
   if (!isAuthenticated) {
     return (
@@ -633,7 +554,7 @@ function App() {
   }
 
   return (
-    <div className="app-wrapper">
+    <div className="app-wrapper app-shell">
       <header className="app-header">
         <div className="app-brand">
           <h1>Flashcard App</h1>
@@ -678,8 +599,37 @@ function App() {
         </div>
       </header>
 
+      <button
+        type="button"
+        className="mobile-deck-trigger"
+        onClick={() => setIsDeckDrawerOpen(true)}
+        aria-controls="deck-drawer"
+        aria-expanded={isDeckDrawerOpen}
+      >
+        <span className="mobile-deck-trigger__label">Học phần hiện tại</span>
+        <span className="mobile-deck-trigger__value">
+          {decks.find((deck) => deck._id === currentDeck)?.deckName || 'Chọn học phần'}
+        </span>
+        <span className="mobile-deck-trigger__hint" aria-hidden="true">Chọn</span>
+      </button>
+
+      {isDeckDrawerOpen && (
+        <button
+          type="button"
+          className="deck-drawer-backdrop"
+          onClick={() => setIsDeckDrawerOpen(false)}
+          aria-label="Đóng danh sách học phần"
+        />
+      )}
+
       <div className="app-layout">
-        <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}>
+        <aside
+          id="deck-drawer"
+          className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}${
+            isDeckDrawerOpen ? ' sidebar--drawer-open' : ''
+          }`}
+          aria-label="Danh sách học phần"
+        >
           {/* Nút toggle ở trên cùng bên trái */}
           <button
             className="sidebar-toggle-btn-top"
@@ -692,13 +642,25 @@ function App() {
           <div className="sidebar-inner">
             <div className="sidebar-header">
               <span className="sidebar-title">Học phần</span>
-              <button 
-                className="sidebar-add-btn"
-                title="Thêm học phần mới"
-                onClick={() => setShowAddDeck(!showAddDeck)}
-              >
-                +
-              </button>
+              <div className="sidebar-header-actions">
+                <button
+                  type="button"
+                  className="sidebar-add-btn"
+                  title="Thêm học phần mới"
+                  aria-label="Thêm học phần mới"
+                  onClick={() => setShowAddDeck(!showAddDeck)}
+                >
+                  <Plus size={16} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="mobile-drawer-close"
+                  onClick={() => setIsDeckDrawerOpen(false)}
+                  aria-label="Đóng danh sách học phần"
+                >
+                  <X size={20} aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
             {/* Form tạo học phần mới */}
@@ -770,7 +732,10 @@ function App() {
                     >
                       <button 
                         className="deck-item-btn"
-                        onClick={() => setCurrentDeck(deck._id)}
+                        onClick={() => {
+                          setCurrentDeck(deck._id);
+                          setIsDeckDrawerOpen(false);
+                        }}
                       >
                         {deck.deckName}
                       </button>
@@ -801,7 +766,7 @@ function App() {
         {/* ================= CỘT PHẢI (MAIN CONTENT) ================= */}
         <div className="main-content">
 
-      <div className="nav-tabs">
+      <nav className="nav-tabs" aria-label="Điều hướng nội dung">
         <button 
           className={`tab-btn ${activeTab === 'review' ? 'active' : ''}`}
           onClick={openReviewTab}
@@ -822,109 +787,28 @@ function App() {
         </button>
         <button 
           className={`tab-btn ${activeTab === 'add' ? 'active' : ''}`}
-          onClick={() => setActiveTab('add')}
+          onClick={() => openAddTab('manual')}
         >
-          Thêm thẻ mới
+          Thêm thẻ
         </button>
-        <button 
-          className={`tab-btn ${activeTab === 'import' ? 'active' : ''}`}
-          onClick={() => setActiveTab('import')}
-        >
-          Nhập từ file (Import)
-        </button>
-      </div>
+      </nav>
 
-      <main>
+      <main className="tab-content">
         {activeTab === 'add' && (
-          <div className="glass-card">
-            <h2 style={{ marginBottom: '1.5rem', color: 'white' }}>Tạo Flashcard mới</h2>
-            <form onSubmit={handleAddCard}>
-              <div className="form-group">
-                <label>Từ vựng (Mặt trước)</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  value={newFront}
-                  onChange={(e) => setNewFront(e.target.value)}
-                  placeholder="Ví dụ: Spaced Repetition"
-                />
-              </div>
-              <div className="form-group">
-                <label>Ý nghĩa (Mặt sau)</label>
-                <textarea 
-                  className="form-control" 
-                  value={newBack}
-                  onChange={(e) => setNewBack(e.target.value)}
-                  rows="3"
-                  placeholder="Ví dụ: Lặp lại ngắt quãng"
-                  style={{ resize: 'vertical' }}
-                ></textarea>
-              </div>
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-                Lưu thẻ
-              </button>
-            </form>
-          </div>
+          <AddCardsPanel
+            currentDeck={currentDeck}
+            mode={addMode}
+            onModeChange={setAddMode}
+            onManualCreated={fetchDueCards}
+            onBulkImported={openReviewTab}
+          />
         )}
 
         {activeTab === 'manage' && (
-          <ManageCards currentDeck={currentDeck} />
-        )}
-
-        {activeTab === 'import' && (
-          <div className="glass-card">
-            <h2 style={{ marginBottom: '1.5rem', color: 'white' }}>Nhập thẻ hàng loạt (Import)</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-              Bạn có thể dán nội dung văn bản vào ô dưới đây, hoặc tải lên một file text (.txt, .csv) chứa từ vựng. 
-              Mỗi từ vựng nên ở trên 1 dòng.
-            </p>
-
-            <div className="form-group" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              <label style={{ margin: 0 }}>Dấu phân cách:</label>
-              <select 
-                className="form-control" 
-                style={{ width: 'auto', padding: '0.5rem' }}
-                value={separator}
-                onChange={(e) => setSeparator(e.target.value)}
-              >
-                <option value="-">Dấu gạch ngang (-)</option>
-                <option value=",">Dấu phẩy (,)</option>
-                <option value="|">Dấu gạch đứng (|)</option>
-                <option value=";">Dấu chấm phẩy (;)</option>
-                <option value="	">Tab</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label>Tải file lên (Tuỳ chọn)</label>
-              <input 
-                type="file" 
-                accept=".txt,.csv" 
-                className="form-control" 
-                onChange={handleFileUpload}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Nội dung Import</label>
-              <textarea 
-                className="form-control" 
-                value={importText}
-                onChange={(e) => setImportText(e.target.value)}
-                rows="8"
-                placeholder={`Ví dụ:\nHello - Xin chào\nApple - Quả táo`}
-                style={{ resize: 'vertical' }}
-              ></textarea>
-            </div>
-
-            <button 
-              className="btn btn-primary" 
-              style={{ width: '100%' }} 
-              onClick={handleImport}
-            >
-              Xem trước / Lưu dữ liệu
-            </button>
-          </div>
+          <ManageCards
+            currentDeck={currentDeck}
+            onOpenImport={() => openAddTab('bulk')}
+          />
         )}
 
         {['review', 'retry'].includes(activeTab) && (
@@ -940,8 +824,8 @@ function App() {
                 </button>
               </div>
             ) : cards.length > 0 ? (
-              <div className="glass-card">
-                <div style={{ textAlign: 'center', marginBottom: '1rem', color: 'var(--text-secondary)' }}>
+              <div className="glass-card review-panel">
+                <div className="review-progress">
                   {reviewMode === 'retry'
                     ? `Còn ${cards.length} thẻ cần nhai lại trong hôm nay`
                     : `Còn ${cards.length} thẻ cần ôn tập hôm nay`}
@@ -1000,7 +884,7 @@ function App() {
                   )}
                   <button 
                     className="btn btn-primary"
-                    onClick={() => setActiveTab('add')}
+                    onClick={() => openAddTab('manual')}
                   >
                     Thêm thẻ mới
                   </button>
@@ -1011,91 +895,51 @@ function App() {
         )}
       </main>
 
-      {/* Modal Preview Import */}
-      {showImportPreview && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-          padding: '2rem'
-        }}>
-          <div className="glass-card" style={{ 
-            width: '100%', 
-            maxWidth: '1200px', 
-            backgroundColor: '#1e293b', 
-            padding: '2rem', 
-            maxHeight: '90vh',
-            display: 'flex',
-            flexDirection: 'column'
-          }}>
-            <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: 'white' }}>
-              Xem trước ({previewCards.length} thẻ)
-            </h3>
-            
-            <div style={{ overflowY: 'auto', flex: 1, marginBottom: '1.5rem' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', color: 'white', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                    <th style={{ padding: '0.75rem', width: '45%' }}>Từ vựng (Mặt trước)</th>
-                    <th style={{ padding: '0.75rem', width: '45%' }}>Nghĩa (Mặt sau)</th>
-                    <th style={{ padding: '0.75rem', width: '10%', textAlign: 'center' }}>Hành động</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {previewCards.map((card, index) => (
-                    <tr key={index} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                      <td style={{ padding: '0.75rem' }}>
-                        <textarea
-                          className="form-control"
-                          value={card.front}
-                          onChange={(e) => handlePreviewCardChange(index, 'front', e.target.value)}
-                          style={{ width: '100%', resize: 'vertical', minHeight: '60px', backgroundColor: 'rgba(0,0,0,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.1)' }}
-                        />
-                      </td>
-                      <td style={{ padding: '0.75rem' }}>
-                        <textarea
-                          className="form-control"
-                          value={card.back}
-                          onChange={(e) => handlePreviewCardChange(index, 'back', e.target.value)}
-                          style={{ width: '100%', resize: 'vertical', minHeight: '60px', backgroundColor: 'rgba(0,0,0,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.1)' }}
-                        />
-                      </td>
-                      <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                        <button 
-                          className="btn" 
-                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', backgroundColor: '#ef4444' }} 
-                          onClick={() => setPreviewCards(previewCards.filter((_, i) => i !== index))}
-                        >
-                          Xoá
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: 'auto' }}>
-              <button 
-                className="btn" 
-                style={{ backgroundColor: '#4b5563' }} 
-                onClick={() => setShowImportPreview(false)}
-                disabled={importLoading}
-              >
-                Huỷ
-              </button>
-              <button 
-                className="btn btn-primary" 
-                onClick={confirmImport}
-                disabled={importLoading}
-              >
-                {importLoading ? 'Đang xử lý...' : 'Lưu thẻ'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
         </div> {/* Đóng main-content */}
       </div> {/* Đóng app-layout */}
+
+      <nav className="mobile-bottom-nav" aria-label="Điều hướng trên điện thoại">
+        <button
+          type="button"
+          className={activeTab === 'review' ? 'active' : ''}
+          onClick={openReviewTab}
+          aria-current={activeTab === 'review' ? 'page' : undefined}
+          aria-label="Ôn tập"
+          title="Ôn tập"
+        >
+          <BookOpen size={20} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={activeTab === 'retry' ? 'active' : ''}
+          onClick={openRetryTab}
+          aria-current={activeTab === 'retry' ? 'page' : undefined}
+          aria-label="Học lại"
+          title="Học lại"
+        >
+          <RotateCcw size={20} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={activeTab === 'manage' ? 'active' : ''}
+          onClick={() => setActiveTab('manage')}
+          aria-current={activeTab === 'manage' ? 'page' : undefined}
+          aria-label="Quản lý thẻ"
+          title="Quản lý thẻ"
+        >
+          <LibraryBig size={20} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={activeTab === 'add' ? 'active' : ''}
+          onClick={() => openAddTab('manual')}
+          aria-current={activeTab === 'add' ? 'page' : undefined}
+          aria-label="Thêm từ"
+          title="Thêm từ"
+        >
+          <Plus size={20} aria-hidden="true" />
+        </button>
+      </nav>
 
       {/* Popup Hướng dẫn sử dụng & Thuật toán SM-2 */}
       <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />

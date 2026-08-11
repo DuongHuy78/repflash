@@ -63,43 +63,51 @@ const ReviewCard = ({
   return (
     <div>
       <div
-        className={`flashcard-container`}
+        className={`flashcard-container${isEditing ? ' is-editing' : ''}`}
         onClick={handleFlip}
-        title="Lật thẻ (Space)"
-        aria-keyshortcuts="Space"
       >
+        {!isEditing && (
+          <button
+            type="button"
+            className="flashcard-flip-target"
+            onClick={handleFlip}
+            aria-label={isFlipped ? 'Thẻ đã lật, xem nghĩa' : 'Lật thẻ để xem nghĩa'}
+            title="Lật thẻ (Space)"
+            aria-keyshortcuts="Space"
+          />
+        )}
         <div className={`flashcard ${isFlipped ? 'flipped' : ''}`}>
           
           {/* Mặt trước */}
-          <div className="flashcard-face flashcard-front">
+          <div className="flashcard-face flashcard-front" aria-hidden={isFlipped && !isEditing}>
             {!isEditing && (
-              <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', display: 'flex', gap: '0.75rem' }}>
+              <div className="flashcard-tools">
                 <button 
+                  type="button"
+                  className="flashcard-tool-btn"
                   onClick={handleSpeak} 
-                  style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'color 0.2s' }}
-                  onMouseEnter={e => e.currentTarget.style.color = '#3b82f6'}
-                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
                   title="Đọc từ vựng (Phím V)"
+                  aria-label="Đọc từ vựng"
                 >
-                  <Volume2 size={20} />
+                  <Volume2 size={20} aria-hidden="true" />
                 </button>
                 <button 
+                  type="button"
+                  className="flashcard-tool-btn flashcard-tool-btn--delete"
                   onClick={handleDeleteClick} 
-                  style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'color 0.2s' }}
-                  onMouseEnter={e => e.currentTarget.style.color = '#ff4d4f'}
-                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
                   title="Xoá thẻ"
+                  aria-label="Xoá thẻ"
                 >
-                  <Trash2 size={20} />
+                  <Trash2 size={20} aria-hidden="true" />
                 </button>
                 <button 
+                  type="button"
+                  className="flashcard-tool-btn"
                   onClick={handleEditClick} 
-                  style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'color 0.2s' }}
-                  onMouseEnter={e => e.currentTarget.style.color = 'white'}
-                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
                   title="Chỉnh sửa"
+                  aria-label="Chỉnh sửa thẻ"
                 >
-                  <Edit2 size={20} />
+                  <Edit2 size={20} aria-hidden="true" />
                 </button>
               </div>
             )}
@@ -136,15 +144,13 @@ const ReviewCard = ({
               <>
                 <span className="flashcard-label">Từ vựng</span>
                 <div className="flashcard-content">{card.front}</div>
-                <div style={{ marginTop: '2rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                  Nhấn để lật
-                </div>
+                <div className="flashcard-flip-hint">Chạm để lật</div>
               </>
             )}
           </div>
           
           {/* Mặt sau */}
-          <div className="flashcard-face flashcard-back">
+          <div className="flashcard-face flashcard-back" aria-hidden={!isFlipped || isEditing}>
             <span className="flashcard-label">Nghĩa</span>
             <div className="flashcard-content">{card.back}</div>
           </div>
@@ -156,20 +162,40 @@ const ReviewCard = ({
           {reviewMode === 'retry' ? (
             // Chế độ bò nhai cỏ: chỉ 2 nút
             <>
-              <button className="btn btn-danger" onClick={(e) => handleScore(e, 1)} title="Chưa nhớ (A)" aria-keyshortcuts="A">
-                Chưa nhớ (Again)
+              <button className="btn btn-danger review-score" onClick={(e) => handleScore(e, 1)} title="Chưa nhớ (A)" aria-keyshortcuts="A">
+                <span className="review-score__label review-score__label--desktop">Chưa nhớ (Again)</span>
+                <span className="review-score__label review-score__label--mobile">Chưa nhớ</span>
+                <span className="review-score__shortcut" aria-hidden="true">A</span>
               </button>
-              <button className="btn btn-success" onClick={(e) => handleScore(e, 3)} title="Đã nhớ (F)" aria-keyshortcuts="F">
-                Đã nhớ (Good)
+              <button className="btn btn-success review-score" onClick={(e) => handleScore(e, 3)} title="Đã nhớ (F)" aria-keyshortcuts="F">
+                <span className="review-score__label review-score__label--desktop">Đã nhớ (Good)</span>
+                <span className="review-score__label review-score__label--mobile">Đã nhớ</span>
+                <span className="review-score__shortcut" aria-hidden="true">F</span>
               </button>
             </>
           ) : (
             // Chế độ ôn tập chính: 4 nút
             <>
-              <button className="btn btn-danger" onClick={(e) => handleScore(e, 1)} title="Lại (A)" aria-keyshortcuts="A">Lại (Again)</button>
-              <button className="btn btn-warning" onClick={(e) => handleScore(e, 2)} title="Khó (S)" aria-keyshortcuts="S">Khó (Hard)</button>
-              <button className="btn btn-info" onClick={(e) => handleScore(e, 3)} title="Tốt (D)" aria-keyshortcuts="D">Tốt (Good)</button>
-              <button className="btn btn-success" onClick={(e) => handleScore(e, 4)} title="Dễ (F)" aria-keyshortcuts="F">Dễ (Easy)</button>
+              <button className="btn btn-danger review-score" onClick={(e) => handleScore(e, 1)} title="Lại (A)" aria-keyshortcuts="A">
+                <span className="review-score__label review-score__label--desktop">Lại (Again)</span>
+                <span className="review-score__label review-score__label--mobile">Lại</span>
+                <span className="review-score__shortcut" aria-hidden="true">A</span>
+              </button>
+              <button className="btn btn-warning review-score" onClick={(e) => handleScore(e, 2)} title="Khó (S)" aria-keyshortcuts="S">
+                <span className="review-score__label review-score__label--desktop">Khó (Hard)</span>
+                <span className="review-score__label review-score__label--mobile">Khó</span>
+                <span className="review-score__shortcut" aria-hidden="true">S</span>
+              </button>
+              <button className="btn btn-info review-score" onClick={(e) => handleScore(e, 3)} title="Tốt (D)" aria-keyshortcuts="D">
+                <span className="review-score__label review-score__label--desktop">Tốt (Good)</span>
+                <span className="review-score__label review-score__label--mobile">Tốt</span>
+                <span className="review-score__shortcut" aria-hidden="true">D</span>
+              </button>
+              <button className="btn btn-success review-score" onClick={(e) => handleScore(e, 4)} title="Dễ (F)" aria-keyshortcuts="F">
+                <span className="review-score__label review-score__label--desktop">Dễ (Easy)</span>
+                <span className="review-score__label review-score__label--mobile">Dễ</span>
+                <span className="review-score__shortcut" aria-hidden="true">F</span>
+              </button>
             </>
           )}
         </div>
