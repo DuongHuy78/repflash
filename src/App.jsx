@@ -34,6 +34,8 @@ function App() {
   const [user, setUser] = useState(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [guideDismissed, setGuideDismissed] = useState(false);
+  const [decksLoaded, setDecksLoaded] = useState(false);
   const [cards, setCards] = useState([]);
   const [decks, setDecks] = useState([]);
   const [currentDeck, setCurrentDeck] = useState(() => {
@@ -74,6 +76,8 @@ function App() {
     setUser(null);
     setShowProfileModal(false);
     setShowHelpModal(false);
+    setGuideDismissed(false);
+    setDecksLoaded(false);
     setCards([]);
     setDecks([]);
     setCurrentDeck('');
@@ -210,8 +214,6 @@ function App() {
 
   const fetchDecks = useCallback(async () => {
     try {
-
-      // BẠN SẼ CODE Ở ĐÂY:
       // 1. Gọi axios.get('/api/decks')
       const res = await axios.get(`${DECK_API_URL}`);      
       // 2. Lưu kết quả vào state `decks` bằng hàm setDecks()
@@ -228,6 +230,8 @@ function App() {
       }
     } catch (error) {
       console.error("Lỗi lấy danh sách học phần", error);
+    } finally {
+      setDecksLoaded(true);
     }
   }, [currentDeck]);
 
@@ -542,6 +546,35 @@ function App() {
     }
   };
 
+  // Quản lý Spotlight hướng dẫn cho người dùng mới (chưa có học phần)
+  const hasSeenGuide = user?._id
+    ? localStorage.getItem(`has_seen_guide_${user._id}`) === 'true'
+    : false;
+
+  const shouldShowGuidePrompt = Boolean(
+    isAuthenticated &&
+    decksLoaded &&
+    decks.length === 0 &&
+    !hasSeenGuide &&
+    !guideDismissed
+  );
+
+  const handleOpenHelp = useCallback(() => {
+    setShowHelpModal(true);
+    if (user?._id) {
+      localStorage.setItem(`has_seen_guide_${user._id}`, 'true');
+    }
+    setGuideDismissed(true);
+  }, [user]);
+
+  const handleDismissGuide = useCallback((e) => {
+    e.stopPropagation();
+    if (user?._id) {
+      localStorage.setItem(`has_seen_guide_${user._id}`, 'true');
+    }
+    setGuideDismissed(true);
+  }, [user]);
+
   // MÀN HÌNH CHƯA ĐĂNG NHẬP
   if (!isAuthenticated) {
     return (
@@ -587,15 +620,42 @@ function App() {
               <span>{user.username}</span>
             </button>
           )}
-          <button 
-            type="button"
-            className="help-icon-btn" 
-            title="Hướng dẫn sử dụng & Thuật toán SM-2"
-            aria-label="Mở hướng dẫn sử dụng"
-            onClick={() => setShowHelpModal(true)}
-          >
-            ?
-          </button>
+          <div className="help-btn-wrapper">
+            <button 
+              type="button"
+              className={`help-icon-btn ${shouldShowGuidePrompt ? 'help-icon-btn--pulse' : ''}`} 
+              title="Hướng dẫn sử dụng & Thuật toán SM-2"
+              aria-label="Mở hướng dẫn sử dụng"
+              onClick={handleOpenHelp}
+            >
+              ?
+              {shouldShowGuidePrompt && (
+                <span className="help-pulse-ring" aria-hidden="true" />
+              )}
+            </button>
+
+            {shouldShowGuidePrompt && (
+              <div className="help-tooltip-callout" role="tooltip">
+                <div className="help-tooltip-callout__arrow" />
+                <div className="help-tooltip-callout__body" onClick={handleOpenHelp}>
+                  <span className="help-tooltip-callout__icon">💡</span>
+                  <div className="help-tooltip-callout__text">
+                    <strong>Bạn mới dùng app?</strong>
+                    <span>Bấm vào đây để xem cách học & phím tắt nhé!</span>
+                  </div>
+                </div>
+                <button 
+                  type="button" 
+                  className="help-tooltip-callout__close" 
+                  onClick={handleDismissGuide}
+                  aria-label="Đóng gợi ý"
+                  title="Đóng"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
