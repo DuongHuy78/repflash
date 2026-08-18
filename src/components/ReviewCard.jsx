@@ -26,7 +26,6 @@ const ReviewCard = ({
   const handleScore = (e, score) => {
     e.stopPropagation();
     onReview(card._id, score);
-    setIsFlipped(false); // Reset for next card
   };
 
   const handleSpeak = (e) => {
@@ -162,12 +161,12 @@ const ReviewCard = ({
           {reviewMode === 'retry' ? (
             // Chế độ bò nhai cỏ: chỉ 2 nút
             <>
-              <button className="btn btn-danger review-score" onClick={(e) => handleScore(e, 1)} title="Chưa nhớ (A)" aria-keyshortcuts="A">
+              <button className="btn btn-danger review-score" onClick={(e) => handleScore(e, 1)} title="Chưa nhớ" aria-keyshortcuts="A">
                 <span className="review-score__label review-score__label--desktop">Chưa nhớ (Again)</span>
                 <span className="review-score__label review-score__label--mobile">Chưa nhớ</span>
                 <span className="review-score__shortcut" aria-hidden="true">A</span>
               </button>
-              <button className="btn btn-success review-score" onClick={(e) => handleScore(e, 3)} title="Đã nhớ (F)" aria-keyshortcuts="F">
+              <button className="btn btn-success review-score" onClick={(e) => handleScore(e, 3)} title="Đã nhớ" aria-keyshortcuts="F">
                 <span className="review-score__label review-score__label--desktop">Đã nhớ (Good)</span>
                 <span className="review-score__label review-score__label--mobile">Đã nhớ</span>
                 <span className="review-score__shortcut" aria-hidden="true">F</span>
@@ -176,22 +175,22 @@ const ReviewCard = ({
           ) : (
             // Chế độ ôn tập chính: 4 nút
             <>
-              <button className="btn btn-danger review-score" onClick={(e) => handleScore(e, 1)} title="Lại (A)" aria-keyshortcuts="A">
+              <button className="btn btn-danger review-score" onClick={(e) => handleScore(e, 1)} title="Lại" aria-keyshortcuts="A">
                 <span className="review-score__label review-score__label--desktop">Lại (Again)</span>
                 <span className="review-score__label review-score__label--mobile">Lại</span>
                 <span className="review-score__shortcut" aria-hidden="true">A</span>
               </button>
-              <button className="btn btn-warning review-score" onClick={(e) => handleScore(e, 2)} title="Khó (S)" aria-keyshortcuts="S">
+              <button className="btn btn-warning review-score" onClick={(e) => handleScore(e, 2)} title="Khó" aria-keyshortcuts="S">
                 <span className="review-score__label review-score__label--desktop">Khó (Hard)</span>
                 <span className="review-score__label review-score__label--mobile">Khó</span>
                 <span className="review-score__shortcut" aria-hidden="true">S</span>
               </button>
-              <button className="btn btn-info review-score" onClick={(e) => handleScore(e, 3)} title="Tốt (D)" aria-keyshortcuts="D">
+              <button className="btn btn-info review-score" onClick={(e) => handleScore(e, 3)} title="Tốt" aria-keyshortcuts="D">
                 <span className="review-score__label review-score__label--desktop">Tốt (Good)</span>
                 <span className="review-score__label review-score__label--mobile">Tốt</span>
                 <span className="review-score__shortcut" aria-hidden="true">D</span>
               </button>
-              <button className="btn btn-success review-score" onClick={(e) => handleScore(e, 4)} title="Dễ (F)" aria-keyshortcuts="F">
+              <button className="btn btn-success review-score" onClick={(e) => handleScore(e, 4)} title="Dễ" aria-keyshortcuts="F">
                 <span className="review-score__label review-score__label--desktop">Dễ (Easy)</span>
                 <span className="review-score__label review-score__label--mobile">Dễ</span>
                 <span className="review-score__shortcut" aria-hidden="true">F</span>
