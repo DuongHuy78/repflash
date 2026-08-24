@@ -327,6 +327,8 @@ function App() {
 
   const currentCard = cards[0];
   const currentCardId = currentCard?._id;
+  const currentDeckObject = decks.find((deck) => deck._id === currentDeck);
+  const currentDeckLanguage = currentDeckObject?.language || 'ja-JP';
   const reviewMode = activeTab === 'retry' ? 'retry' : 'main';
   const isStudyTab = ['review', 'retry'].includes(activeTab);
   const {
@@ -809,6 +811,7 @@ function App() {
         {activeTab === 'add' && (
           <AddCardsPanel
             currentDeck={currentDeck}
+            currentDeckLanguage={currentDeckLanguage}
             mode={addMode}
             onModeChange={setAddMode}
             onManualCreated={fetchDueCards}

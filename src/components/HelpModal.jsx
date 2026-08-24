@@ -49,13 +49,19 @@ const HELP_CONTENT = {
     shortcutDesc: 'Tăng tốc độ học gấp 3 lần mà không cần dùng chuột:',
     shortcuts: [
       { key: 'Space', desc: 'Lật mặt trước / mặt sau thẻ' },
-      { key: 'A', desc: 'Đánh giá 1 - Lại (Again)' },
-      { key: 'S', desc: 'Đánh giá 2 - Khó (Hard)' },
-      { key: 'D', desc: 'Đánh giá 3 - Tốt (Good)' },
-      { key: 'F', desc: 'Đánh giá 4 - Dễ (Easy)' },
-      { key: 'V', desc: 'Phát âm từ vựng (Voice)' },
+      { key: 'H', desc: 'Bật / tắt hiển thị cách đọc ở mặt trước (trước khi lật thẻ)' },
+      { key: 'A', desc: 'Đánh giá 1 - Lại (Again) (sau khi đã lật thẻ)' },
+      { key: 'S', desc: 'Đánh giá 2 - Khó (Hard) (sau khi đã lật thẻ, chỉ vòng chính)' },
+      { key: 'D', desc: 'Đánh giá 3 - Tốt (Good) (sau khi đã lật thẻ, chỉ vòng chính)' },
+      { key: 'F', desc: 'Đánh giá 4 - Dễ (Easy) / Đã nhớ (sau khi đã lật thẻ)' },
+      { key: 'V', desc: 'Phát âm từ vựng / câu ví dụ (Voice)' },
       { key: 'R', desc: 'Đổi câu danh ngôn cổ vũ' },
       { key: 'Esc', desc: 'Thoát chế độ sửa thẻ' },
+    ],
+    shortcutNotes: [
+      'Phím đánh giá (A, S, D, F) chỉ có tác dụng sau khi bạn đã lật sang mặt sau của thẻ.',
+      'Ở chế độ "Bò nhai cỏ", chỉ dùng 2 phím: A (Lại - 1) và F (Đã nhớ - 3).',
+      'Tất cả phím tắt sẽ tự động bị vô hiệu hóa khi con trỏ đang ở trong ô nhập liệu (input, textarea).',
     ],
   },
   en: {
@@ -105,13 +111,19 @@ const HELP_CONTENT = {
     shortcutDesc: 'Speed up your learning 3x without using the mouse:',
     shortcuts: [
       { key: 'Space', desc: 'Flip front / back of card' },
-      { key: 'A', desc: 'Rate 1 - Again' },
-      { key: 'S', desc: 'Rate 2 - Hard' },
-      { key: 'D', desc: 'Rate 3 - Good' },
-      { key: 'F', desc: 'Rate 4 - Easy' },
-      { key: 'V', desc: 'Pronounce word (Voice)' },
+      { key: 'H', desc: 'Toggle pronunciation on front (before flipping card)' },
+      { key: 'A', desc: 'Rate 1 - Again (after flipping card)' },
+      { key: 'S', desc: 'Rate 2 - Hard (after flipping card, main session only)' },
+      { key: 'D', desc: 'Rate 3 - Good (after flipping card, main session only)' },
+      { key: 'F', desc: 'Rate 4 - Easy / Remembered (after flipping card)' },
+      { key: 'V', desc: 'Pronounce word / example (Voice)' },
       { key: 'R', desc: 'Change motivational quote' },
       { key: 'Esc', desc: 'Exit edit mode' },
+    ],
+    shortcutNotes: [
+      'Rating shortcuts (A, S, D, F) only work after flipping to the back of the card.',
+      'In "Same-Day Retry" mode, only 2 keys are active: A (Again - 1) and F (Remembered - 3).',
+      'All shortcuts are automatically disabled while typing in text inputs or textareas.',
     ],
   },
   ja: {
@@ -160,14 +172,20 @@ const HELP_CONTENT = {
     shortcutTitle: '⌨️ 5. ショートカットキー',
     shortcutDesc: 'マウスを使わずに学習スピードを3倍にアップ：',
     shortcuts: [
-      { key: 'Space', desc: 'カードをめくる（表/裏）' },
-      { key: 'A', desc: '評価 1 - もう一度 (Again)' },
-      { key: 'S', desc: '評価 2 - 難しい (Hard)' },
-      { key: 'D', desc: '評価 3 - 良好 (Good)' },
-      { key: 'F', desc: '評価 4 - 簡単 (Easy)' },
-      { key: 'V', desc: '単語の発音 (Voice)' },
+      { key: 'Space', desc: 'カードをめくる（表 / 裏）' },
+      { key: 'H', desc: '表面の読み方を表示 / 非表示（めくる前）' },
+      { key: 'A', desc: '評価 1 - もう一度 (Again)（裏面表示後）' },
+      { key: 'S', desc: '評価 2 - 難しい (Hard)（裏面表示後・通常復習のみ）' },
+      { key: 'D', desc: '評価 3 - 良好 (Good)（裏面表示後・通常復習のみ）' },
+      { key: 'F', desc: '評価 4 - 簡単 (Easy) / 覚えた（裏面表示後）' },
+      { key: 'V', desc: '単語・例文の発音 (Voice)' },
       { key: 'R', desc: '名言を変更' },
       { key: 'Esc', desc: '編集モードを終了' },
+    ],
+    shortcutNotes: [
+      '評価キー（A, S, D, F）はカードを裏返した後にのみ動作します。',
+      '「当日復習」モードでは、A（もう一度 - 1）と F（覚えた - 3）の2キーのみ使用します。',
+      '入力フォーム（input, textarea）にフォーカスがある間は、ショートカットは自動的に無効化されます。',
     ],
   },
 };
@@ -268,6 +286,13 @@ const HelpModal = ({ isOpen, onClose }) => {
                 </div>
               ))}
             </div>
+            {content.shortcutNotes && (
+              <ul className="help-shortcut-notes">
+                {content.shortcutNotes.map((note, index) => (
+                  <li key={index}>{note}</li>
+                ))}
+              </ul>
+            )}
           </section>
         </div>
 
@@ -280,3 +305,4 @@ const HelpModal = ({ isOpen, onClose }) => {
 };
 
 export default HelpModal;
+

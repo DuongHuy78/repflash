@@ -1,14 +1,15 @@
 import { useId, useRef, useState } from 'react';
 import axios from 'axios';
-import { AlertCircle, ArrowLeft, CheckCircle2, Trash2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, Copy, Sparkles, Trash2 } from 'lucide-react';
 import CardContentFields from './CardContentFields';
 import useDialogFocus from '../hooks/useDialogFocus';
 import {
+  buildAiPrompt,
   compactCardContent,
   createEmptyCardContent,
   getCardValidationErrors,
   hasCardValidationErrors,
-  toEditableCardContent,
+  parseBulkImportText,
 } from '../utils/cardContentUtils';
 
 const API_URL = (import.meta.env.VITE_API_URL || '') + '/api/cards';
@@ -26,6 +27,7 @@ const ADD_MODES = {
 
 const AddCardsPanel = ({
   currentDeck,
+  currentDeckLanguage = 'ja-JP',
   mode = 'manual',
   onModeChange,
   onManualCreated,
@@ -34,7 +36,8 @@ const AddCardsPanel = ({
 }) => {
   const [manualDraft, setManualDraft] = useState(createEmptyCardContent);
   const [importText, setImportText] = useState('');
-  const [separator, setSeparator] = useState('-');
+  const [separator, setSeparator] = useState('|');
+  const [copyFeedback, setCopyFeedback] = useState('');
   const [previewCards, setPreviewCards] = useState([]);
   const [showImportPreview, setShowImportPreview] = useState(false);
   const [isManualSubmitting, setIsManualSubmitting] = useState(false);
@@ -44,6 +47,7 @@ const AddCardsPanel = ({
   const fileInputRef = useRef(null);
   const previewButtonRef = useRef(null);
   const previewDialogRef = useRef(null);
+  const copyFeedbackTimerRef = useRef(null);
   const idPrefix = useId();
 
   const manualTabId = `${idPrefix}-manual-tab`;
@@ -53,10 +57,13 @@ const AddCardsPanel = ({
   const separatorInputId = `${idPrefix}-separator`;
   const fileInputId = `${idPrefix}-file`;
   const importTextId = `${idPrefix}-import-text`;
+  const aiPromptTextId = `${idPrefix}-ai-prompt-text`;
   const hasDeck = Boolean(currentDeck);
   const previewErrors = previewCards.map(getCardValidationErrors);
   const invalidPreviewCount = previewErrors.filter(hasCardValidationErrors).length;
   const validPreviewCount = previewCards.length - invalidPreviewCount;
+
+  const aiPromptText = buildAiPrompt(currentDeckLanguage);
 
   const changeMode = (nextMode) => {
     if (nextMode === mode) return;
@@ -110,6 +117,31 @@ const AddCardsPanel = ({
     setBulkError('');
   };
 
+  const handleCopyAiPrompt = async () => {
+    if (!hasDeck) return;
+    setSeparator('|');
+    setBulkError('');
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(aiPromptText);
+        setCopyFeedback('Đã sao chép prompt AI và chọn dấu phân cách |.');
+      } else {
+        throw new Error('Clipboard API không khả dụng');
+      }
+    } catch (error) {
+      console.warn('Lỗi sao chép prompt vào clipboard:', error);
+      setCopyFeedback('Không thể tự động sao chép. Hãy chọn và sao chép thủ công từ ô bên dưới.');
+    }
+
+    if (copyFeedbackTimerRef.current) {
+      window.clearTimeout(copyFeedbackTimerRef.current);
+    }
+    copyFeedbackTimerRef.current = window.setTimeout(() => {
+      setCopyFeedback('');
+    }, 4000);
+  };
+
   const handleCreatePreview = () => {
     if (!hasDeck) {
       setBulkError('Hãy chọn hoặc tạo một học phần trước khi thêm thẻ.');
@@ -121,19 +153,12 @@ const AddCardsPanel = ({
       return;
     }
 
-    const cards = [];
+    const { cards, errors } = parseBulkImportText(importText, separator);
 
-    importText.split('\n').forEach((line) => {
-      if (!line.trim()) return;
-
-      const parts = line.split(separator);
-      if (parts.length >= 2) {
-        cards.push(toEditableCardContent({
-          front: parts[0].trim(),
-          back: parts.slice(1).join(separator).trim(),
-        }));
-      }
-    });
+    if (errors.length > 0) {
+      setBulkError(errors.join('\n'));
+      return;
+    }
 
     if (cards.length === 0) {
       setBulkError('Không tìm thấy thẻ hợp lệ. Hãy kiểm tra lại từng dòng và dấu phân cách.');
@@ -196,7 +221,11 @@ const AddCardsPanel = ({
       onBulkImported?.();
     } catch (error) {
       console.error('Error importing cards:', error);
-      setBulkError('Không thể import thẻ. Hãy kiểm tra kết nối rồi thử lại.');
+      const responseData = error.response?.data;
+      const message = typeof responseData === 'string'
+        ? responseData
+        : responseData?.message || 'Không thể import thẻ. Hãy kiểm tra kết nối rồi thử lại.';
+      setBulkError(message);
     } finally {
       setIsImportSubmitting(false);
     }
@@ -294,10 +323,58 @@ const AddCardsPanel = ({
           aria-labelledby={bulkTabId}
         >
           <p className="add-cards-panel__description">
-            Mỗi thẻ nằm trên một dòng. Mặt trước và mặt sau được ngăn bằng dấu bạn chọn.
+            Mỗi thẻ nằm trên một dòng. Hỗ trợ định dạng 2 cột (<code>Từ | Nghĩa</code>) hoặc 6 cột đầy đủ cách đọc và câu ví dụ.
           </p>
 
-          {bulkError && <p className="add-cards-panel__error" role="alert">{bulkError}</p>}
+          <section className="add-cards-panel__ai-box" aria-label="Trợ lý Prompt AI">
+            <div className="add-cards-panel__ai-header">
+              <div className="add-cards-panel__ai-title">
+                <Sparkles size={18} aria-hidden="true" className="add-cards-panel__ai-icon" />
+                <strong>Tạo thẻ nhanh với AI</strong>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary add-cards-panel__ai-copy-btn"
+                onClick={handleCopyAiPrompt}
+                disabled={!hasDeck || isImportSubmitting}
+                title="Sao chép prompt và tự động đặt dấu phân cách |"
+              >
+                <Copy size={16} aria-hidden="true" />
+                Sao chép prompt AI
+              </button>
+            </div>
+
+            <p className="add-cards-panel__ai-desc">
+              Sao chép prompt bên dưới, dán vào AI (ChatGPT, Claude, Gemini...) kèm danh sách từ của bạn, sau đó dán kết quả vào ô bên dưới.
+            </p>
+
+            {copyFeedback && (
+              <p className="add-cards-panel__ai-feedback" role="status" aria-live="polite">
+                {copyFeedback}
+              </p>
+            )}
+
+            <div className="form-group add-cards-panel__ai-prompt-group">
+              <label htmlFor={aiPromptTextId} className="add-cards-panel__ai-label">
+                Nội dung prompt AI (tự động theo ngôn ngữ học phần: <em>{currentDeckLanguage}</em>)
+              </label>
+              <textarea
+                id={aiPromptTextId}
+                className="form-control add-cards-panel__ai-prompt-textarea"
+                value={aiPromptText}
+                readOnly
+                rows="6"
+                onFocus={(e) => e.target.select()}
+                aria-label="Prompt mẫu cho AI"
+              />
+            </div>
+          </section>
+
+          {bulkError && (
+            <div className="add-cards-panel__error" role="alert" style={{ whiteSpace: 'pre-line' }}>
+              {bulkError}
+            </div>
+          )}
 
           <fieldset className="add-cards-fieldset" disabled={!hasDeck || isImportSubmitting}>
             <div className="form-group add-cards-panel__separator">
@@ -311,9 +388,9 @@ const AddCardsPanel = ({
                   setBulkError('');
                 }}
               >
+                <option value="|">Dấu gạch đứng (|) - Khuyên dùng cho AI</option>
                 <option value="-">Dấu gạch ngang (-)</option>
                 <option value=",">Dấu phẩy (,)</option>
-                <option value="|">Dấu gạch đứng (|)</option>
                 <option value=";">Dấu chấm phẩy (;)</option>
                 <option value="\t">Tab</option>
               </select>
@@ -339,7 +416,7 @@ const AddCardsPanel = ({
                 value={importText}
                 onChange={(event) => handleImportTextChange(event.target.value)}
                 rows="8"
-                placeholder={'Ví dụ:\nHello - Xin chào\nApple - Quả táo'}
+                placeholder={`Ví dụ 6 cột:\n覚悟 | Quyết tâm | かくご | 覚悟を決めて挑戦する。 | Tôi quyết tâm thử thách bản thân. | かくごをきめてちょうせんする。\napple | Quả táo. | /ˈæp.əl/ | She eats an apple every day. | Cô ấy ăn một quả táo mỗi ngày. |\n\nHoặc ví dụ 2 cột:\nHello | Xin chào\nCat | Con mèo`}
               />
             </div>
 
