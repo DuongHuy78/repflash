@@ -1,5 +1,15 @@
 import { useId, useRef, useState } from 'react';
 import axios from 'axios';
+import { AlertCircle, ArrowLeft, CheckCircle2, Trash2 } from 'lucide-react';
+import CardContentFields from './CardContentFields';
+import useDialogFocus from '../hooks/useDialogFocus';
+import {
+  compactCardContent,
+  createEmptyCardContent,
+  getCardValidationErrors,
+  hasCardValidationErrors,
+  toEditableCardContent,
+} from '../utils/cardContentUtils';
 
 const API_URL = (import.meta.env.VITE_API_URL || '') + '/api/cards';
 
@@ -20,8 +30,9 @@ const AddCardsPanel = ({
   onModeChange,
   onManualCreated,
   onBulkImported,
+  onFullscreenChange,
 }) => {
-  const [manualDraft, setManualDraft] = useState({ front: '', back: '' });
+  const [manualDraft, setManualDraft] = useState(createEmptyCardContent);
   const [importText, setImportText] = useState('');
   const [separator, setSeparator] = useState('-');
   const [previewCards, setPreviewCards] = useState([]);
@@ -31,45 +42,44 @@ const AddCardsPanel = ({
   const [manualErrors, setManualErrors] = useState({});
   const [bulkError, setBulkError] = useState('');
   const fileInputRef = useRef(null);
+  const previewButtonRef = useRef(null);
+  const previewDialogRef = useRef(null);
   const idPrefix = useId();
 
   const manualTabId = `${idPrefix}-manual-tab`;
   const bulkTabId = `${idPrefix}-bulk-tab`;
   const manualPanelId = `${idPrefix}-manual-panel`;
   const bulkPanelId = `${idPrefix}-bulk-panel`;
-  const frontInputId = `${idPrefix}-front`;
-  const backInputId = `${idPrefix}-back`;
   const separatorInputId = `${idPrefix}-separator`;
   const fileInputId = `${idPrefix}-file`;
   const importTextId = `${idPrefix}-import-text`;
   const hasDeck = Boolean(currentDeck);
+  const previewErrors = previewCards.map(getCardValidationErrors);
+  const invalidPreviewCount = previewErrors.filter(hasCardValidationErrors).length;
+  const validPreviewCount = previewCards.length - invalidPreviewCount;
 
   const changeMode = (nextMode) => {
     if (nextMode === mode) return;
     onModeChange(nextMode);
   };
 
-  const handleManualFieldChange = (fieldName, value) => {
-    setManualDraft((currentDraft) => ({
-      ...currentDraft,
-      [fieldName]: value,
-    }));
-    setManualErrors((currentErrors) => ({
-      ...currentErrors,
-      [fieldName]: '',
-      submit: '',
-    }));
+  const handleManualDraftChange = (nextDraft) => {
+    setManualDraft(nextDraft);
+    setManualErrors({});
   };
 
   const handleManualSubmit = async (event) => {
     event.preventDefault();
 
     const nextErrors = {};
-    const front = manualDraft.front.trim();
-    const back = manualDraft.back.trim();
+    const normalizedDraft = compactCardContent(manualDraft);
 
-    if (!front) nextErrors.front = 'Hãy nhập mặt trước của thẻ.';
-    if (!back) nextErrors.back = 'Hãy nhập mặt sau của thẻ.';
+    if (!normalizedDraft.front) nextErrors.front = 'Hãy nhập mặt trước của thẻ.';
+    if (!normalizedDraft.back) nextErrors.back = 'Hãy nhập mặt sau của thẻ.';
+    const exampleErrors = normalizedDraft.examples.map((example) => (
+      example.text ? '' : 'Hãy nhập câu ví dụ hoặc xóa mục này.'
+    ));
+    if (exampleErrors.some(Boolean)) nextErrors.examples = exampleErrors;
     if (!hasDeck) nextErrors.submit = 'Hãy chọn hoặc tạo một học phần trước khi thêm thẻ.';
 
     if (Object.keys(nextErrors).length > 0) {
@@ -81,8 +91,8 @@ const AddCardsPanel = ({
     setManualErrors({});
 
     try {
-      await axios.post(API_URL, { front, back, deck: currentDeck });
-      setManualDraft({ front: '', back: '' });
+      await axios.post(API_URL, { ...normalizedDraft, deckId: currentDeck });
+      setManualDraft(createEmptyCardContent());
       alert('Đã thêm thẻ thành công!');
       onManualCreated?.();
     } catch (error) {
@@ -118,10 +128,10 @@ const AddCardsPanel = ({
 
       const parts = line.split(separator);
       if (parts.length >= 2) {
-        cards.push({
+        cards.push(toEditableCardContent({
           front: parts[0].trim(),
           back: parts.slice(1).join(separator).trim(),
-        });
+        }));
       }
     });
 
@@ -131,24 +141,42 @@ const AddCardsPanel = ({
     }
 
     setPreviewCards(cards);
+    previewButtonRef.current = document.activeElement;
     setShowImportPreview(true);
+    onFullscreenChange?.(true);
     setBulkError('');
   };
 
-  const handlePreviewCardChange = (index, fieldName, value) => {
+  const handlePreviewCardChange = (index, nextCard) => {
     setPreviewCards((currentCards) => currentCards.map((card, cardIndex) => (
-      cardIndex === index ? { ...card, [fieldName]: value } : card
+      cardIndex === index ? nextCard : card
     )));
+    setBulkError('');
   };
 
   const handlePreviewCardDelete = (index) => {
     setPreviewCards((currentCards) => currentCards.filter((_, cardIndex) => cardIndex !== index));
+    setBulkError('');
+  };
+
+  const closeImportPreview = () => {
+    if (isImportSubmitting) return;
+    setShowImportPreview(false);
+    setBulkError('');
+    onFullscreenChange?.(false);
   };
 
   const handleConfirmImport = async () => {
     if (previewCards.length === 0) {
       setBulkError('Preview không còn thẻ nào để lưu. Hãy đóng preview và kiểm tra lại nội dung import.');
-      setShowImportPreview(false);
+      return;
+    }
+
+    const normalizedCards = previewCards.map(compactCardContent);
+    const invalidCardIndex = previewErrors.findIndex(hasCardValidationErrors);
+
+    if (invalidCardIndex >= 0) {
+      setBulkError(`Thẻ ${invalidCardIndex + 1} còn thiếu mặt trước, mặt sau hoặc câu ví dụ.`);
       return;
     }
 
@@ -156,19 +184,19 @@ const AddCardsPanel = ({
 
     try {
       const response = await axios.post(`${API_URL}/bulk`, {
-        cards: previewCards,
-        deck: currentDeck,
+        cards: normalizedCards,
+        deckId: currentDeck,
       });
 
       setImportText('');
       setPreviewCards([]);
       setShowImportPreview(false);
+      onFullscreenChange?.(false);
       alert(`Đã thêm thành công ${response.data.count} thẻ!`);
       onBulkImported?.();
     } catch (error) {
       console.error('Error importing cards:', error);
       setBulkError('Không thể import thẻ. Hãy kiểm tra kết nối rồi thử lại.');
-      setShowImportPreview(false);
     } finally {
       setIsImportSubmitting(false);
     }
@@ -184,6 +212,14 @@ const AddCardsPanel = ({
     };
     reader.readAsText(file);
   };
+
+  useDialogFocus({
+    open: showImportPreview,
+    dialogRef: previewDialogRef,
+    onClose: closeImportPreview,
+    returnFocusRef: previewButtonRef,
+    closeDisabled: isImportSubmitting,
+  });
 
   return (
     <section className="glass-card content-panel add-cards-panel" aria-labelledby={`${idPrefix}-title`}>
@@ -236,43 +272,13 @@ const AddCardsPanel = ({
             )}
 
             <fieldset className="add-cards-fieldset" disabled={!hasDeck || isManualSubmitting}>
-              <div className="form-group">
-                <label htmlFor={frontInputId}>Từ vựng (Mặt trước)</label>
-                <input
-                  id={frontInputId}
-                  type="text"
-                  className="form-control"
-                  value={manualDraft.front}
-                  onChange={(event) => handleManualFieldChange('front', event.target.value)}
-                  placeholder="Ví dụ: Spaced Repetition"
-                  aria-invalid={Boolean(manualErrors.front)}
-                  aria-describedby={manualErrors.front ? `${frontInputId}-error` : undefined}
-                />
-                {manualErrors.front && (
-                  <p id={`${frontInputId}-error`} className="add-cards-panel__field-error">
-                    {manualErrors.front}
-                  </p>
-                )}
-              </div>
-
-              <div className="form-group">
-                <label htmlFor={backInputId}>Ý nghĩa (Mặt sau)</label>
-                <textarea
-                  id={backInputId}
-                  className="form-control"
-                  value={manualDraft.back}
-                  onChange={(event) => handleManualFieldChange('back', event.target.value)}
-                  rows="3"
-                  placeholder="Ví dụ: Lặp lại ngắt quãng"
-                  aria-invalid={Boolean(manualErrors.back)}
-                  aria-describedby={manualErrors.back ? `${backInputId}-error` : undefined}
-                />
-                {manualErrors.back && (
-                  <p id={`${backInputId}-error`} className="add-cards-panel__field-error">
-                    {manualErrors.back}
-                  </p>
-                )}
-              </div>
+              <CardContentFields
+                value={manualDraft}
+                onChange={handleManualDraftChange}
+                idPrefix={`${idPrefix}-manual`}
+                errors={manualErrors}
+                mode="create"
+              />
 
               <button type="submit" className="btn btn-primary add-cards-panel__cta">
                 {isManualSubmitting ? 'Đang thêm...' : 'Thêm thẻ'}
@@ -337,7 +343,7 @@ const AddCardsPanel = ({
               />
             </div>
 
-            <button type="button" className="btn btn-primary add-cards-panel__cta" onClick={handleCreatePreview}>
+            <button ref={previewButtonRef} type="button" className="btn btn-primary add-cards-panel__cta" onClick={handleCreatePreview}>
               Xem trước thẻ
             </button>
           </fieldset>
@@ -347,61 +353,87 @@ const AddCardsPanel = ({
       {showImportPreview && (
         <div className="modal-overlay import-preview-overlay" role="presentation">
           <section
+            ref={previewDialogRef}
             className="glass-card import-preview-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby={`${idPrefix}-preview-title`}
+            tabIndex="-1"
           >
-            <h3 id={`${idPrefix}-preview-title`}>Xem trước ({previewCards.length} thẻ)</h3>
+            <header className="import-preview-header">
+              <button
+                type="button"
+                className="import-preview-header__back"
+                onClick={closeImportPreview}
+                disabled={isImportSubmitting}
+              >
+                <ArrowLeft size={20} aria-hidden="true" />
+                Quay lại
+              </button>
+              <div>
+                <h3 id={`${idPrefix}-preview-title`}>Xem trước thẻ</h3>
+                <p aria-live="polite">
+                  <span className="import-preview-count import-preview-count--valid">
+                    <CheckCircle2 size={16} aria-hidden="true" />
+                    {validPreviewCount} hợp lệ
+                  </span>
+                  {invalidPreviewCount > 0 && (
+                    <span className="import-preview-count import-preview-count--invalid">
+                      <AlertCircle size={16} aria-hidden="true" />
+                      {invalidPreviewCount} lỗi
+                    </span>
+                  )}
+                </p>
+              </div>
+            </header>
 
-            <div className="import-preview-table-wrap">
-              <table className="import-preview-table">
-                <thead>
-                  <tr>
-                    <th>Từ vựng (Mặt trước)</th>
-                    <th>Nghĩa (Mặt sau)</th>
-                    <th>Hành động</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {previewCards.map((card, index) => (
-                    <tr key={`${card.front}-${index}`}>
-                      <td>
-                        <textarea
-                          className="form-control"
-                          value={card.front}
-                          onChange={(event) => handlePreviewCardChange(index, 'front', event.target.value)}
-                          aria-label={`Mặt trước của thẻ ${index + 1}`}
-                        />
-                      </td>
-                      <td>
-                        <textarea
-                          className="form-control"
-                          value={card.back}
-                          onChange={(event) => handlePreviewCardChange(index, 'back', event.target.value)}
-                          aria-label={`Mặt sau của thẻ ${index + 1}`}
-                        />
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn btn-danger"
-                          onClick={() => handlePreviewCardDelete(index)}
-                        >
-                          Xóa
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {bulkError && <p className="add-cards-panel__error import-preview-error" role="alert">{bulkError}</p>}
+
+            <div className="import-preview-list">
+              {previewCards.length === 0 ? (
+                <div className="import-preview-empty">
+                  <strong>Preview không còn thẻ nào</strong>
+                  <p>Quay lại để kiểm tra dữ liệu import.</p>
+                </div>
+              ) : previewCards.map((card, index) => {
+                const cardHasErrors = hasCardValidationErrors(previewErrors[index]);
+
+                return (
+                <article key={`preview-${index}`} className={`import-preview-card${cardHasErrors ? ' invalid' : ' valid'}`}>
+                  <header className="import-preview-card__header">
+                    <strong>
+                      {cardHasErrors
+                        ? <AlertCircle size={17} aria-hidden="true" />
+                        : <CheckCircle2 size={17} aria-hidden="true" />}
+                      Thẻ {index + 1} · {cardHasErrors ? 'Cần sửa' : 'Hợp lệ'}
+                    </strong>
+                    <button
+                      type="button"
+                      className="import-preview-card__delete"
+                      onClick={() => handlePreviewCardDelete(index)}
+                      aria-label={`Xóa thẻ ${index + 1}`}
+                      title={`Xóa thẻ ${index + 1}`}
+                    >
+                      <Trash2 size={18} aria-hidden="true" />
+                    </button>
+                  </header>
+                  <CardContentFields
+                    value={card}
+                    onChange={(nextCard) => handlePreviewCardChange(index, nextCard)}
+                    idPrefix={`${idPrefix}-preview-${index}`}
+                    errors={previewErrors[index]}
+                    mode="preview"
+                  />
+                </article>
+                );
+              })}
             </div>
 
-            <div className="import-preview-actions">
+            <footer className="import-preview-actions">
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => setShowImportPreview(false)}
+                onClick={closeImportPreview}
                 disabled={isImportSubmitting}
               >
                 Hủy
@@ -410,11 +442,11 @@ const AddCardsPanel = ({
                 type="button"
                 className="btn btn-primary"
                 onClick={handleConfirmImport}
-                disabled={isImportSubmitting || previewCards.length === 0}
+                disabled={isImportSubmitting || previewCards.length === 0 || invalidPreviewCount > 0}
               >
-                {isImportSubmitting ? 'Đang lưu...' : 'Lưu thẻ'}
+                {isImportSubmitting ? 'Đang nhập…' : `Nhập ${validPreviewCount} thẻ`}
               </button>
-            </div>
+            </footer>
           </section>
         </div>
       )}

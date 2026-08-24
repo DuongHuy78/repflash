@@ -1,6 +1,24 @@
 import { useState } from 'react';
-import { Edit2, Check, X, Trash2, Volume2 } from 'lucide-react';
+import {
+  Brain,
+  Check,
+  CheckCheck,
+  Edit2,
+  Eye,
+  EyeOff,
+  FlipHorizontal2,
+  RotateCcw,
+  ThumbsUp,
+  Trash2,
+  Volume2,
+  X,
+  Zap,
+} from 'lucide-react';
 import { speakText } from '../utils/speechUtils';
+import {
+  getCardSpeechText,
+  getExampleSpeechText,
+} from '../utils/cardContentUtils';
 
 const ReviewCard = ({
   card,
@@ -8,6 +26,8 @@ const ReviewCard = ({
   setIsFlipped,
   isEditing,
   setIsEditing,
+  isPronunciationVisible,
+  onTogglePronunciation,
   onReview,
   onEdit,
   onDelete,
@@ -16,6 +36,10 @@ const ReviewCard = ({
 }) => {
   const [editFront, setEditFront] = useState(card.front);
   const [editBack, setEditBack] = useState(card.back);
+  const pronunciation = card.pronunciation?.trim() || '';
+  const examples = Array.isArray(card.examples)
+    ? card.examples.filter((example) => example?.text?.trim())
+    : [];
 
   const handleFlip = () => {
     if (!isEditing) {
@@ -28,9 +52,24 @@ const ReviewCard = ({
     onReview(card._id, score);
   };
 
+  const handleFlipAction = (e) => {
+    e.stopPropagation();
+    handleFlip();
+  };
+
   const handleSpeak = (e) => {
     e.stopPropagation();
-    speakText(card.front, currentDeckLanguage);
+    speakText(getCardSpeechText(card, currentDeckLanguage), currentDeckLanguage);
+  };
+
+  const handleSpeakExample = (e, example) => {
+    e.stopPropagation();
+    speakText(getExampleSpeechText(example), currentDeckLanguage);
+  };
+
+  const handleTogglePronunciation = (e) => {
+    e.stopPropagation();
+    onTogglePronunciation?.();
   };
 
   const handleEditClick = (e) => {
@@ -60,7 +99,7 @@ const ReviewCard = ({
   };
 
   return (
-    <div>
+    <div className="review-card">
       <div
         className={`flashcard-container${isEditing ? ' is-editing' : ''}`}
         onClick={handleFlip}
@@ -70,7 +109,7 @@ const ReviewCard = ({
             type="button"
             className="flashcard-flip-target"
             onClick={handleFlip}
-            aria-label={isFlipped ? 'Thẻ đã lật, xem nghĩa' : 'Lật thẻ để xem nghĩa'}
+            aria-label={isFlipped ? 'Lật về mặt trước' : 'Lật thẻ để xem nghĩa'}
             title="Lật thẻ (Space)"
             aria-keyshortcuts="Space"
           />
@@ -83,10 +122,12 @@ const ReviewCard = ({
               <div className="flashcard-tools">
                 <button 
                   type="button"
-                  className="flashcard-tool-btn"
+                  className="flashcard-tool-btn flashcard-tool-btn--speak"
                   onClick={handleSpeak} 
                   title="Đọc từ vựng (Phím V)"
                   aria-label="Đọc từ vựng"
+                  tabIndex={isFlipped ? -1 : 0}
+                  disabled={isFlipped}
                 >
                   <Volume2 size={20} aria-hidden="true" />
                 </button>
@@ -96,15 +137,19 @@ const ReviewCard = ({
                   onClick={handleDeleteClick} 
                   title="Xoá thẻ"
                   aria-label="Xoá thẻ"
+                  tabIndex={isFlipped ? -1 : 0}
+                  disabled={isFlipped}
                 >
                   <Trash2 size={20} aria-hidden="true" />
                 </button>
                 <button 
                   type="button"
-                  className="flashcard-tool-btn"
+                  className="flashcard-tool-btn flashcard-tool-btn--edit"
                   onClick={handleEditClick} 
                   title="Chỉnh sửa"
                   aria-label="Chỉnh sửa thẻ"
+                  tabIndex={isFlipped ? -1 : 0}
+                  disabled={isFlipped}
                 >
                   <Edit2 size={20} aria-hidden="true" />
                 </button>
@@ -142,7 +187,41 @@ const ReviewCard = ({
             ) : (
               <>
                 <span className="flashcard-label">Từ vựng</span>
-                <div className="flashcard-content">{card.front}</div>
+                <div className="flashcard-content flashcard-content--front">
+                  <div className="flashcard-term">{card.front}</div>
+                  {pronunciation && isPronunciationVisible && (
+                    <div className="flashcard-pronunciation">{pronunciation}</div>
+                  )}
+                </div>
+                <div className="flashcard-front-actions">
+                  {pronunciation && (
+                    <button
+                      type="button"
+                      className="flashcard-pronunciation-toggle"
+                      onClick={handleTogglePronunciation}
+                      aria-keyshortcuts="H"
+                      aria-pressed={isPronunciationVisible}
+                      aria-label={isPronunciationVisible ? 'Ẩn cách đọc' : 'Hiện cách đọc'}
+                      tabIndex={isFlipped ? -1 : 0}
+                      disabled={isFlipped}
+                    >
+                      {isPronunciationVisible
+                        ? <EyeOff size={18} aria-hidden="true" />
+                        : <Eye size={18} aria-hidden="true" />}
+                      {isPronunciationVisible ? 'Ẩn cách đọc' : 'Hiện cách đọc'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="flashcard-flip-action"
+                    onClick={handleFlipAction}
+                    aria-keyshortcuts="Space"
+                    disabled={isFlipped}
+                  >
+                    <FlipHorizontal2 size={19} aria-hidden="true" />
+                    Lật thẻ (Hiện nghĩa)
+                  </button>
+                </div>
                 <div className="flashcard-flip-hint">Chạm để lật</div>
               </>
             )}
@@ -150,8 +229,64 @@ const ReviewCard = ({
           
           {/* Mặt sau */}
           <div className="flashcard-face flashcard-back" aria-hidden={!isFlipped || isEditing}>
-            <span className="flashcard-label">Nghĩa</span>
-            <div className="flashcard-content">{card.back}</div>
+            <div className="flashcard-tools flashcard-tools--back">
+              <button
+                type="button"
+                className="flashcard-tool-btn flashcard-tool-btn--speak"
+                onClick={handleSpeak}
+                title="Đọc từ vựng (Phím V)"
+                aria-label="Đọc từ vựng"
+                tabIndex={isFlipped && !isEditing ? 0 : -1}
+                disabled={!isFlipped || isEditing}
+              >
+                <Volume2 size={20} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="flashcard-content flashcard-content--answer">
+              <header className="flashcard-answer__term">
+                <div className="flashcard-term">{card.front}</div>
+                {pronunciation && (
+                  <div className="flashcard-pronunciation">{pronunciation}</div>
+                )}
+              </header>
+
+              <section className="flashcard-answer__section">
+                <h3>Nghĩa</h3>
+                <div className="flashcard-answer__meaning">{card.back}</div>
+              </section>
+
+              {examples.length > 0 && (
+                <section className="flashcard-answer__section flashcard-answer__examples">
+                  <h3>Ví dụ</h3>
+                  <div className="flashcard-example-list">
+                    {examples.map((example, index) => (
+                      <article key={`${example.text}-${index}`} className="flashcard-example">
+                        <div className="flashcard-example__source">
+                          <p>{example.text}</p>
+                          <button
+                            type="button"
+                            className="flashcard-example__speak"
+                            onClick={(event) => handleSpeakExample(event, example)}
+                            aria-label={`Đọc ví dụ ${index + 1}`}
+                            title={`Đọc ví dụ ${index + 1}`}
+                            tabIndex={isFlipped && !isEditing ? 0 : -1}
+                            disabled={!isFlipped || isEditing}
+                          >
+                            <Volume2 size={18} aria-hidden="true" />
+                          </button>
+                        </div>
+                        {example.translation?.trim() && (
+                          <p className="flashcard-example__translation">
+                            {example.translation}
+                          </p>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -162,11 +297,13 @@ const ReviewCard = ({
             // Chế độ bò nhai cỏ: chỉ 2 nút
             <>
               <button className="btn btn-danger review-score" onClick={(e) => handleScore(e, 1)} title="Chưa nhớ" aria-keyshortcuts="A">
+                <span className="review-score__icon" aria-hidden="true"><RotateCcw size={20} /></span>
                 <span className="review-score__label review-score__label--desktop">Chưa nhớ (Again)</span>
                 <span className="review-score__label review-score__label--mobile">Chưa nhớ</span>
                 <span className="review-score__shortcut" aria-hidden="true">A</span>
               </button>
               <button className="btn btn-success review-score" onClick={(e) => handleScore(e, 3)} title="Đã nhớ" aria-keyshortcuts="F">
+                <span className="review-score__icon" aria-hidden="true"><CheckCheck size={21} /></span>
                 <span className="review-score__label review-score__label--desktop">Đã nhớ (Good)</span>
                 <span className="review-score__label review-score__label--mobile">Đã nhớ</span>
                 <span className="review-score__shortcut" aria-hidden="true">F</span>
@@ -176,21 +313,25 @@ const ReviewCard = ({
             // Chế độ ôn tập chính: 4 nút
             <>
               <button className="btn btn-danger review-score" onClick={(e) => handleScore(e, 1)} title="Lại" aria-keyshortcuts="A">
+                <span className="review-score__icon" aria-hidden="true"><RotateCcw size={20} /></span>
                 <span className="review-score__label review-score__label--desktop">Lại (Again)</span>
                 <span className="review-score__label review-score__label--mobile">Lại</span>
                 <span className="review-score__shortcut" aria-hidden="true">A</span>
               </button>
               <button className="btn btn-warning review-score" onClick={(e) => handleScore(e, 2)} title="Khó" aria-keyshortcuts="S">
+                <span className="review-score__icon" aria-hidden="true"><Brain size={21} /></span>
                 <span className="review-score__label review-score__label--desktop">Khó (Hard)</span>
                 <span className="review-score__label review-score__label--mobile">Khó</span>
                 <span className="review-score__shortcut" aria-hidden="true">S</span>
               </button>
               <button className="btn btn-info review-score" onClick={(e) => handleScore(e, 3)} title="Tốt" aria-keyshortcuts="D">
+                <span className="review-score__icon" aria-hidden="true"><ThumbsUp size={21} /></span>
                 <span className="review-score__label review-score__label--desktop">Tốt (Good)</span>
                 <span className="review-score__label review-score__label--mobile">Tốt</span>
                 <span className="review-score__shortcut" aria-hidden="true">D</span>
               </button>
               <button className="btn btn-success review-score" onClick={(e) => handleScore(e, 4)} title="Dễ" aria-keyshortcuts="F">
+                <span className="review-score__icon" aria-hidden="true"><Zap size={21} /></span>
                 <span className="review-score__label review-score__label--desktop">Dễ (Easy)</span>
                 <span className="review-score__label review-score__label--mobile">Dễ</span>
                 <span className="review-score__shortcut" aria-hidden="true">F</span>

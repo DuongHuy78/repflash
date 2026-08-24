@@ -1,14 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { BookOpen, LibraryBig, Plus, RefreshCw, RotateCcw, UserRound, X } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import ReviewCard from './components/ReviewCard';
+import DesktopAppShell from './components/DesktopAppShell';
+import StudyCompletion from './components/StudyCompletion';
+import StudySessionHeader from './components/StudySessionHeader';
 import './index.css'; // Premium CSS
 import ManageCards from './components/ManageCards';
 import AddCardsPanel from './components/AddCardsPanel';
 import AuthPage from './components/AuthPage'; // <--- Import trang Đăng nhập
 import QUOTES from './quotes.json';
 import { speakText, getAvailableLanguages } from './utils/speechUtils';
-import { getStreakConfig } from './utils/streakUtils';
+import { getCardSpeechText } from './utils/cardContentUtils';
+import useStudySession from './hooks/useStudySession';
 import HelpModal from './components/HelpModal';
 import ProfileModal from './components/ProfileModal';
 
@@ -34,10 +38,15 @@ function App() {
   const [user, setUser] = useState(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [isFullscreenFlow, setIsFullscreenFlow] = useState(false);
   const [guideDismissed, setGuideDismissed] = useState(false);
   const [decksLoaded, setDecksLoaded] = useState(false);
   const [cards, setCards] = useState([]);
   const [decks, setDecks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [retryCardsCount, setRetryCardsCount] = useState(0);
+  const [sessionMilestone, setSessionMilestone] = useState(null);
   const [currentDeck, setCurrentDeck] = useState(() => {
     return localStorage.getItem('currentDeck') || '';
   });
@@ -76,9 +85,12 @@ function App() {
     setUser(null);
     setShowProfileModal(false);
     setShowHelpModal(false);
+    setIsFullscreenFlow(false);
     setGuideDismissed(false);
     setDecksLoaded(false);
     setCards([]);
+    setRetryCardsCount(0);
+    setSessionMilestone(null);
     setDecks([]);
     setCurrentDeck('');
     localStorage.removeItem('currentDeck');
@@ -174,9 +186,10 @@ function App() {
   }, [token]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchUserProfile();
-    }
+    if (!isAuthenticated) return undefined;
+
+    const timeoutId = window.setTimeout(fetchUserProfile, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [isAuthenticated, fetchUserProfile]);
 
   const [activeTab, setActiveTab] = useState('review'); // 'review', 'retry', 'manage', 'add'
@@ -249,6 +262,7 @@ function App() {
       setNewDeckName('');
       setShowAddDeck(false);
     } catch (error) {
+      console.error('Lỗi tạo học phần:', error);
       alert("Có lỗi khi tạo học phần");
     }
   };
@@ -295,24 +309,58 @@ function App() {
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchDecks();
-    }
+    if (!isAuthenticated) return undefined;
+
+    const timeoutId = window.setTimeout(fetchDecks, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [isAuthenticated, fetchDecks]);
   
   // Quote state
   const [currentQuote, setCurrentQuote] = useState(() => QUOTES[Math.floor(Math.random() * QUOTES.length)]);
 
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
-  const [cardUiState, setCardUiState] = useState({ cardId: null, isFlipped: false, isEditing: false });
-  const [reviewMode, setReviewMode] = useState('main'); // 'main', 'retry'
+  const [cardUiState, setCardUiState] = useState({
+    cardId: null,
+    isFlipped: false,
+    isEditing: false,
+    isPronunciationVisible: false,
+  });
 
   const currentCard = cards[0];
   const currentCardId = currentCard?._id;
+  const reviewMode = activeTab === 'retry' ? 'retry' : 'main';
+  const isStudyTab = ['review', 'retry'].includes(activeTab);
+  const {
+    session: studySession,
+    progress: sessionProgress,
+    isInitialEmpty: isInitialStudyEmpty,
+    isCompleted: isStudyCompleted,
+    recordReview: recordStudyReview,
+  } = useStudySession({
+    enabled: isStudyTab,
+    deckId: currentDeck,
+    mode: reviewMode,
+    cards,
+    loading,
+  });
+  const studyProgress = sessionProgress.total > 0
+    ? sessionProgress
+    : {
+        current: cards.length > 0 ? 1 : 0,
+        total: cards.length,
+        percentage: 0,
+      };
+  const isFocusedStudy = Boolean(
+    isStudyTab &&
+    !loading &&
+    !loadError &&
+    (cards.length > 0 || isStudyCompleted)
+  );
   const isCurrentCardUiState = cardUiState.cardId === currentCardId;
   const isCardFlipped = isCurrentCardUiState ? cardUiState.isFlipped : false;
   const isCardEditing = isCurrentCardUiState ? cardUiState.isEditing : false;
+  const isPronunciationVisible = isCurrentCardUiState
+    ? cardUiState.isPronunciationVisible
+    : false;
 
   const setIsCardFlipped = useCallback((nextValue) => {
     setCardUiState((state) => {
@@ -323,6 +371,7 @@ function App() {
         cardId: currentCardId,
         isFlipped: resolveStateUpdate(nextValue, currentFlipped),
         isEditing: isCurrent ? state.isEditing : false,
+        isPronunciationVisible: isCurrent ? state.isPronunciationVisible : false,
       };
     });
   }, [currentCardId]);
@@ -336,38 +385,86 @@ function App() {
         cardId: currentCardId,
         isFlipped: isCurrent ? state.isFlipped : false,
         isEditing: resolveStateUpdate(nextValue, currentEditing),
+        isPronunciationVisible: isCurrent ? state.isPronunciationVisible : false,
       };
     });
   }, [currentCardId]);
 
+  const toggleCurrentCardPronunciation = useCallback(() => {
+    setCardUiState((state) => {
+      const isCurrent = state.cardId === currentCardId;
+
+      return {
+        cardId: currentCardId,
+        isFlipped: isCurrent ? state.isFlipped : false,
+        isEditing: isCurrent ? state.isEditing : false,
+        isPronunciationVisible: isCurrent ? !state.isPronunciationVisible : true,
+      };
+    });
+  }, [currentCardId]);
+
+  const fetchRetryCount = useCallback(async () => {
+    if (!currentDeck) {
+      setRetryCardsCount(0);
+      return 0;
+    }
+
+    try {
+      const response = await axios.get(RETRY_API_URL, {
+        params: { deckId: currentDeck },
+      });
+      const count = Array.isArray(response.data) ? response.data.length : 0;
+      setRetryCardsCount(count);
+      return count;
+    } catch (error) {
+      console.warn('Không tải được số thẻ bò nhai cỏ:', error);
+      setRetryCardsCount(0);
+      return 0;
+    }
+  }, [currentDeck]);
+
   const fetchDueCards = useCallback(async () => {
     if (!currentDeck) {
       setCards([]);
+      setRetryCardsCount(0);
+      setSessionMilestone(null);
       setLoading(false); 
       return;
     }
     setLoading(true);
     setLoadError('');
-    setReviewMode('main');
+    setSessionMilestone(null);
     try {
-      const res = await axios.get(`${API_URL}?deck=${currentDeck}`);
+      const res = await axios.get(API_URL, {
+        params: { deckId: currentDeck },
+      });
       setCards(res.data);
+      await fetchRetryCount();
     } catch (error) {
       console.error("Error fetching cards:", error.messanger);
       setLoadError('Không kết nối được backend. Hãy kiểm tra backend đang chạy ở cổng 6000.');
     } finally {
       setLoading(false);
     }
-  }, [currentDeck]);
+  }, [currentDeck, fetchRetryCount]);
 
   const fetchRetryCards = useCallback(async () => {
-    if (!currentDeck) return;
+    if (!currentDeck) {
+      setCards([]);
+      setRetryCardsCount(0);
+      setSessionMilestone(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setLoadError('');
+    setSessionMilestone(null);
     try {
-      const res = await axios.get(`${RETRY_API_URL}?deck=${currentDeck}`);
+      const res = await axios.get(RETRY_API_URL, {
+        params: { deckId: currentDeck },
+      });
       setCards(res.data);
-      setReviewMode('retry');
+      setRetryCardsCount(Array.isArray(res.data) ? res.data.length : 0);
     } catch (error) {
       console.error("Error fetching retry cards:", error);
       setLoadError('Không tải được danh sách thẻ cần ôn lại. Hãy kiểm tra backend đang chạy ở cổng 6000.');
@@ -384,7 +481,7 @@ function App() {
       } while (newQuote === quote && QUOTES.length > 1);
       return newQuote;
     });
-  }, []);
+  }, [setCurrentQuote]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -396,25 +493,66 @@ function App() {
   }, [fetchDueCards, fetchRetryCards, activeTab, currentDeck]);
 
   const openReviewTab = useCallback(() => {
-    setActiveTab('review');
-    fetchDueCards();
-  }, [fetchDueCards]);
+    setIsFullscreenFlow(false);
+    if (activeTab === 'review') fetchDueCards();
+    else {
+      setCards([]);
+      setLoading(true);
+      setLoadError('');
+      setIsDeckDrawerOpen(false);
+      setActiveTab('review');
+    }
+  }, [activeTab, fetchDueCards]);
 
   const openRetryTab = useCallback(() => {
-    setActiveTab('retry');
-    fetchRetryCards();
-  }, [fetchRetryCards]);
+    setIsFullscreenFlow(false);
+    if (activeTab === 'retry') fetchRetryCards();
+    else {
+      setCards([]);
+      setLoading(true);
+      setLoadError('');
+      setIsDeckDrawerOpen(false);
+      setActiveTab('retry');
+    }
+  }, [activeTab, fetchRetryCards]);
+
+  const openManageTab = useCallback(() => {
+    setIsFullscreenFlow(false);
+    setIsDeckDrawerOpen(false);
+    setActiveTab('manage');
+  }, []);
+
+  const handleChooseDeck = useCallback(() => {
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      setIsDeckDrawerOpen(true);
+    } else {
+      setActiveTab('manage');
+    }
+  }, []);
 
   const openAddTab = useCallback((mode = 'manual') => {
+    setIsFullscreenFlow(false);
+    setIsDeckDrawerOpen(false);
     setAddMode(mode);
     setActiveTab('add');
   }, []);
+
+  const handleSelectDeck = useCallback((deckId) => {
+    if (isStudyTab) {
+      setCards([]);
+      setLoading(true);
+      setLoadError('');
+    }
+    setCurrentDeck(deckId);
+    setIsDeckDrawerOpen(false);
+  }, [isStudyTab]);
 
   const handleReview = useCallback(async (id, quality) => {
     try {
       const res = await axios.put(`${API_URL}/${id}/review`, { quality });
       const updatedCard = res.data.card || (res.data._id ? res.data : null);
       const { newMilestone, currentStreak } = res.data;
+      recordStudyReview(quality);
 
       setCards((currentCards) => {
         const reviewedCard = currentCards.find(card => card._id === id);
@@ -426,6 +564,12 @@ function App() {
 
         return remainingCards;
       });
+
+      if (reviewMode === 'main' && quality === 1) {
+        setRetryCardsCount((count) => count + 1);
+      } else if (reviewMode === 'retry' && quality === 3) {
+        setRetryCardsCount((count) => Math.max(0, count - 1));
+      }
       setIsCardFlipped(false);
 
       // Cập nhật streak trực tiếp lên UI (KHÔNG cần gọi fetchUserProfile thừa)
@@ -434,12 +578,12 @@ function App() {
       }
 
       if (newMilestone) {
-        console.log("🎉 Bạn vừa mở khóa mốc Streak mới:", newMilestone);
+        setSessionMilestone(newMilestone);
       }
     } catch (error) {
       console.error("Error reviewing card:", error);
     }
-  }, [reviewMode, setIsCardFlipped]);
+  }, [recordStudyReview, reviewMode, setIsCardFlipped]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -475,11 +619,17 @@ function App() {
         return;
       }
 
+      if (key === 'h' && !isCardFlipped && currentCard.pronunciation?.trim()) {
+        event.preventDefault();
+        toggleCurrentCardPronunciation();
+        return;
+      }
+
       if (key === 'v' && currentCard && !isCardEditing) {
         event.preventDefault();
         const currentDeckObj = decks.find(d => d._id === currentDeck);
         const deckLang = currentDeckObj?.language || 'ja-JP';
-        speakText(currentCard.front, deckLang);
+        speakText(getCardSpeechText(currentCard, deckLang), deckLang);
         return;
       }
 
@@ -513,6 +663,7 @@ function App() {
     activeTab,
     currentCard,
     currentDeck,
+    decks,
     handleRandomQuote,
     handleReview,
     isCardEditing,
@@ -522,6 +673,7 @@ function App() {
     setIsCardEditing,
     setIsCardFlipped,
     reviewMode,
+    toggleCurrentCardPronunciation,
   ]);
 
   const handleEdit = async (id, updatedFront, updatedBack) => {
@@ -539,7 +691,10 @@ function App() {
     if (!window.confirm("Bạn có chắc chắn muốn xóa thẻ này?")) return;
     try {
       await axios.delete(`${API_URL}/${id}`);
-      setCards(cards.filter(card => card._id !== id));
+      setCards((currentCards) => currentCards.filter(card => card._id !== id));
+      if (reviewMode === 'retry') {
+        setRetryCardsCount((count) => Math.max(0, count - 1));
+      }
     } catch (error) {
       console.error("Error deleting card:", error);
       alert("Có lỗi xảy ra khi xóa thẻ");
@@ -587,273 +742,70 @@ function App() {
   }
 
   return (
-    <div className="app-wrapper app-shell">
-      <header className="app-header">
-        <div className="app-brand">
-          <h1>Flashcard App</h1>
-          <p className="subtitle">Học từ vựng hiệu quả vào đúng thời điểm</p>
-        </div>
-        <div className="app-header-actions">
-          {user && (() => {
-            const streakConfig = getStreakConfig(user.currentStreak || 0);
-            return (
-              <div 
-                className={`streak-badge ${streakConfig.badgeClass}`}
-                title={`Danh hiệu: ${streakConfig.title} | Kỷ lục: ${user.longestStreak || 0} ngày`}
-              >
-                <span className="streak-icon">{streakConfig.icon}</span>
-                <span className="streak-count">{user.currentStreak || 0}</span>
-                <span className="streak-label">ngày</span>
-              </div>
-            );
-          })()}
-          {user && (
-            <button
-              ref={profileButtonRef}
-              type="button"
-              className="profile-trigger"
-              onClick={() => setShowProfileModal(true)}
-              aria-haspopup="dialog"
-              aria-expanded={showProfileModal}
-            >
-              <UserRound size={18} aria-hidden="true" />
-              <span>{user.username}</span>
-            </button>
+    <DesktopAppShell
+      topBarProps={{
+        user,
+        profileButtonRef,
+        showProfileModal,
+        onOpenProfile: () => setShowProfileModal(true),
+        shouldShowGuidePrompt,
+        onOpenHelp: handleOpenHelp,
+        onDismissGuide: handleDismissGuide,
+      }}
+      sidebarProps={{
+        decks,
+        currentDeck,
+        sidebarCollapsed,
+        isDeckDrawerOpen,
+        onToggleSidebar: () => setSidebarCollapsed(!sidebarCollapsed),
+        onCloseDrawer: () => setIsDeckDrawerOpen(false),
+        showAddDeck,
+        onToggleAddDeck: () => setShowAddDeck(!showAddDeck),
+        newDeckName,
+        onNewDeckNameChange: setNewDeckName,
+        newDeckLanguage,
+        onNewDeckLanguageChange: setNewDeckLanguage,
+        availableLanguages,
+        onCreateDeck: handleCreateDeck,
+        editingDeckId,
+        editingDeckName,
+        onEditingDeckNameChange: setEditingDeckName,
+        onCancelRenameDeck: () => setEditingDeckId(null),
+        onSaveRenameDeck: handleSaveRenameDeck,
+        onStartRenameDeck: handleStartRenameDeck,
+        onDeleteDeck: handleDeleteDeck,
+        onSelectDeck: handleSelectDeck,
+      }}
+      decks={decks}
+      currentDeck={currentDeck}
+      isDeckDrawerOpen={isDeckDrawerOpen}
+      onOpenDeckDrawer={() => setIsDeckDrawerOpen(true)}
+      onCloseDeckDrawer={() => setIsDeckDrawerOpen(false)}
+      activeTab={activeTab}
+      cardsCount={cards.length}
+      isFocusedStudy={isFocusedStudy}
+      isFullscreenFlow={isFullscreenFlow}
+      onOpenReview={openReviewTab}
+      onOpenRetry={openRetryTab}
+      onOpenManage={openManageTab}
+      onOpenAdd={() => openAddTab('manual')}
+      overlays={(
+        <>
+          <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
+
+          {showProfileModal && user && (
+            <ProfileModal
+              user={user}
+              onClose={closeProfileModal}
+              onSave={handleProfileSave}
+              onChangePassword={handlePasswordChange}
+              onLogout={handleLogout}
+              returnFocusRef={profileButtonRef}
+            />
           )}
-          <div className="help-btn-wrapper">
-            <button 
-              type="button"
-              className={`help-icon-btn ${shouldShowGuidePrompt ? 'help-icon-btn--pulse' : ''}`} 
-              title="Hướng dẫn sử dụng & Thuật toán SM-2"
-              aria-label="Mở hướng dẫn sử dụng"
-              onClick={handleOpenHelp}
-            >
-              ?
-              {shouldShowGuidePrompt && (
-                <span className="help-pulse-ring" aria-hidden="true" />
-              )}
-            </button>
-
-            {shouldShowGuidePrompt && (
-              <div className="help-tooltip-callout" role="tooltip">
-                <div className="help-tooltip-callout__arrow" />
-                <div className="help-tooltip-callout__body" onClick={handleOpenHelp}>
-                  <span className="help-tooltip-callout__icon">💡</span>
-                  <div className="help-tooltip-callout__text">
-                    <strong>Bạn mới dùng app?</strong>
-                    <span>Bấm vào đây để xem cách học & phím tắt nhé!</span>
-                  </div>
-                </div>
-                <button 
-                  type="button" 
-                  className="help-tooltip-callout__close" 
-                  onClick={handleDismissGuide}
-                  aria-label="Đóng gợi ý"
-                  title="Đóng"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <button
-        type="button"
-        className="mobile-deck-trigger"
-        onClick={() => setIsDeckDrawerOpen(true)}
-        aria-controls="deck-drawer"
-        aria-expanded={isDeckDrawerOpen}
-      >
-        <span className="mobile-deck-trigger__label">Học phần hiện tại</span>
-        <span className="mobile-deck-trigger__value">
-          {decks.find((deck) => deck._id === currentDeck)?.deckName || 'Chọn học phần'}
-        </span>
-        <span className="mobile-deck-trigger__hint" aria-hidden="true">Chọn</span>
-      </button>
-
-      {isDeckDrawerOpen && (
-        <button
-          type="button"
-          className="deck-drawer-backdrop"
-          onClick={() => setIsDeckDrawerOpen(false)}
-          aria-label="Đóng danh sách học phần"
-        />
+        </>
       )}
-
-      <div className="app-layout">
-        <aside
-          id="deck-drawer"
-          className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}${
-            isDeckDrawerOpen ? ' sidebar--drawer-open' : ''
-          }`}
-          aria-label="Danh sách học phần"
-        >
-          {/* Nút toggle ở trên cùng bên trái */}
-          <button
-            className="sidebar-toggle-btn-top"
-            title={sidebarCollapsed ? 'Mở rộng danh sách' : 'Thu nhỏ danh sách'}
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          >
-            <span className={`sidebar-toggle-icon${sidebarCollapsed ? ' rotated' : ''}`}>‹</span>
-          </button>
-
-          <div className="sidebar-inner">
-            <div className="sidebar-header">
-              <span className="sidebar-title">Học phần</span>
-              <div className="sidebar-header-actions">
-                <button
-                  type="button"
-                  className="sidebar-add-btn"
-                  title="Thêm học phần mới"
-                  aria-label="Thêm học phần mới"
-                  onClick={() => setShowAddDeck(!showAddDeck)}
-                >
-                  <Plus size={16} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className="mobile-drawer-close"
-                  onClick={() => setIsDeckDrawerOpen(false)}
-                  aria-label="Đóng danh sách học phần"
-                >
-                  <X size={20} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-
-            {/* Form tạo học phần mới */}
-            {showAddDeck && (
-              <form onSubmit={handleCreateDeck} className="sidebar-add-form">
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  placeholder="Tên học phần (VD: IELTS)..."
-                  value={newDeckName}
-                  onChange={(e) => setNewDeckName(e.target.value)}
-                />
-                <select
-                  className="form-control"
-                  value={newDeckLanguage}
-                  onChange={(e) => setNewDeckLanguage(e.target.value)}
-                  style={{ padding: '0.5rem', fontSize: '0.85rem' }}
-                >
-                  {availableLanguages.length > 0 ? (
-                    availableLanguages.map((lang) => (
-                      <option key={lang.code} value={lang.code}>
-                        {lang.name}
-                      </option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="ja-JP">ja-JP (Tiếng Nhật)</option>
-                      <option value="en-US">en-US (Tiếng Anh)</option>
-                      <option value="zh-CN">zh-CN (Tiếng Trung)</option>
-                      <option value="vi-VN">vi-VN (Tiếng Việt)</option>
-                      <option value="ko-KR">ko-KR (Tiếng Hàn)</option>
-                    </>
-                  )}
-                </select>
-                <button type="submit" className="btn btn-success" style={{ width: '100%', padding: '0.5rem' }}>Lưu</button>
-              </form>
-            )}
-
-            {/* Danh sách Học phần */}
-            <div className="deck-list">
-              {decks.length === 0 ? (
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', padding: '0.5rem' }}>Chưa có học phần nào</p>
-              ) : (
-                decks.map((deck) => (
-                  editingDeckId === deck._id ? (
-                    <div key={deck._id} className="deck-item-container active" style={{ padding: '0.3rem 0.4rem' }}>
-                      <input
-                        type="text"
-                        className="form-control deck-rename-input"
-                        value={editingDeckName}
-                        onChange={(e) => setEditingDeckName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.target.blur();
-                          }
-                          if (e.key === 'Escape') {
-                            setEditingDeckId(null);
-                          }
-                        }}
-                        onBlur={() => handleSaveRenameDeck(deck._id, deck.deckName)}
-                        autoFocus
-                        onFocus={(e) => e.target.select()}
-                      />
-                    </div>
-                  ) : (
-                    <div 
-                      key={deck._id} 
-                      className={`deck-item-container ${currentDeck === deck._id ? 'active' : ''}`}
-                    >
-                      <button 
-                        className="deck-item-btn"
-                        onClick={() => {
-                          setCurrentDeck(deck._id);
-                          setIsDeckDrawerOpen(false);
-                        }}
-                      >
-                        {deck.deckName}
-                      </button>
-                      <div className="deck-actions">
-                        <button 
-                          className="deck-action-btn"
-                          title="Sửa học phần"
-                          onClick={(e) => { e.stopPropagation(); handleStartRenameDeck(deck); }}
-                        >
-                          ✎
-                        </button>
-                        <button 
-                          className="deck-action-btn delete"
-                          title="Xóa học phần (kèm xóa tất cả thẻ)"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteDeck(deck._id, deck.deckName); }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                  )
-                ))
-              )}
-            </div>
-          </div>
-        </aside>
-
-        {/* ================= CỘT PHẢI (MAIN CONTENT) ================= */}
-        <div className="main-content">
-
-      <nav className="nav-tabs" aria-label="Điều hướng nội dung">
-        <button 
-          className={`tab-btn ${activeTab === 'review' ? 'active' : ''}`}
-          onClick={openReviewTab}
-        >
-          Ôn tập {activeTab === 'review' ? `(${cards.length})` : ''}
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'retry' ? 'active' : ''}`}
-          onClick={openRetryTab}
-        >
-          Bò nhai cỏ {activeTab === 'retry' ? `(${cards.length})` : ''}
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'manage' ? 'active' : ''}`}
-          onClick={() => setActiveTab('manage')}
-        >
-          Quản lý thẻ
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'add' ? 'active' : ''}`}
-          onClick={() => openAddTab('manual')}
-        >
-          Thêm thẻ
-        </button>
-      </nav>
-
-      <main className="tab-content">
+    >
         {activeTab === 'add' && (
           <AddCardsPanel
             currentDeck={currentDeck}
@@ -861,6 +813,7 @@ function App() {
             onModeChange={setAddMode}
             onManualCreated={fetchDueCards}
             onBulkImported={openReviewTab}
+            onFullscreenChange={setIsFullscreenFlow}
           />
         )}
 
@@ -868,11 +821,12 @@ function App() {
           <ManageCards
             currentDeck={currentDeck}
             onOpenImport={() => openAddTab('bulk')}
+            onFullscreenChange={setIsFullscreenFlow}
           />
         )}
 
-        {['review', 'retry'].includes(activeTab) && (
-          <div>
+        {isStudyTab && (
+          <div className={`study-page${isFocusedStudy ? ' study-page--focused' : ''}${isStudyCompleted ? ' study-page--completed' : ''}`}>
             {loading ? (
               <div className="empty-state"><h3>Đang tải dữ liệu...</h3></div>
             ) : loadError ? (
@@ -884,66 +838,98 @@ function App() {
                 </button>
               </div>
             ) : cards.length > 0 ? (
-              <div className="glass-card review-panel">
-                <div className="review-progress">
-                  {reviewMode === 'retry'
-                    ? `Còn ${cards.length} thẻ cần nhai lại trong hôm nay`
-                    : `Còn ${cards.length} thẻ cần ôn tập hôm nay`}
-                </div>
-                {/* Chỉ hiển thị thẻ đầu tiên trong danh sách để học */}
-                <ReviewCard
-                  key={currentCard._id}
-                  card={currentCard}
-                  isFlipped={isCardFlipped}
-                  setIsFlipped={setIsCardFlipped}
-                  isEditing={isCardEditing}
-                  setIsEditing={setIsCardEditing}
-                  onReview={handleReview}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  reviewMode={reviewMode}
-                  currentDeckLanguage={decks.find(d => d._id === currentDeck)?.language || 'ja-JP'}
+              <>
+                <StudySessionHeader
+                  mode={reviewMode}
+                  progress={studyProgress}
+                  onExit={openManageTab}
                 />
-                
-                {/* Quote Section */}
-                <div className="quote-container">
-                  <div className="quote-text">
-                    {currentQuote.split(/\s*(?:\\n|\n|\/n)\s*/).map((line, i, arr) => (
-                      <span key={i}>
-                        {line}
-                        {i < arr.length - 1 && <br />}
-                      </span>
-                    ))}
+                <div className="glass-card review-panel">
+                  <div className="review-progress">
+                    {reviewMode === 'retry'
+                      ? `Còn ${cards.length} thẻ cần nhai lại trong hôm nay`
+                      : `Còn ${cards.length} thẻ cần ôn tập hôm nay`}
                   </div>
-                  <button
-                    className="quote-btn"
-                    onClick={handleRandomQuote}
-                    title="Đổi câu khác (R)"
-                    aria-keyshortcuts="R"
-                  >
-                    <RefreshCw size={20} />
-                  </button>
+                  {/* Chỉ hiển thị thẻ đầu tiên trong danh sách để học */}
+                  <ReviewCard
+                    key={currentCard._id}
+                    card={currentCard}
+                    isFlipped={isCardFlipped}
+                    setIsFlipped={setIsCardFlipped}
+                    isEditing={isCardEditing}
+                    setIsEditing={setIsCardEditing}
+                    isPronunciationVisible={isPronunciationVisible}
+                    onTogglePronunciation={toggleCurrentCardPronunciation}
+                    onReview={handleReview}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    reviewMode={reviewMode}
+                    currentDeckLanguage={decks.find(d => d._id === currentDeck)?.language || 'ja-JP'}
+                  />
+
+                  {/* Quote Section */}
+                  <div className="quote-container">
+                    <div className="quote-text">
+                      {currentQuote.split(/\s*(?:\\n|\n|\/n)\s*/).map((line, i, arr) => (
+                        <span key={i}>
+                          {line}
+                          {i < arr.length - 1 && <br />}
+                        </span>
+                      ))}
+                    </div>
+                    <button
+                      className="quote-btn"
+                      onClick={handleRandomQuote}
+                      title="Đổi câu khác (R)"
+                      aria-keyshortcuts="R"
+                    >
+                      <RefreshCw size={20} />
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </>
+            ) : isStudyCompleted ? (
+              <StudyCompletion
+                mode={reviewMode}
+                session={studySession}
+                retryCardsCount={retryCardsCount}
+                currentStreak={user?.currentStreak || 0}
+                newMilestone={sessionMilestone}
+                onContinueRetry={openRetryTab}
+                onChooseDeck={handleChooseDeck}
+                onOpenManage={openManageTab}
+              />
             ) : (
-              <div className="glass-card empty-state">
-                <h3>🎉 Chúc mừng!</h3>
+              <div className="glass-card empty-state study-initial-empty" data-empty={isInitialStudyEmpty || undefined}>
+                <h3>
+                  {!currentDeck
+                    ? 'Chưa chọn học phần'
+                    : reviewMode === 'retry'
+                      ? 'Chưa có thẻ cần nhai lại'
+                      : 'Hôm nay không còn thẻ đến hạn'}
+                </h3>
                 <p>
-                  {reviewMode === 'retry'
-                    ? 'Bạn đã hoàn thành cả vòng bò nhai cỏ hôm nay.'
-                    : 'Bạn đã hoàn thành tất cả các thẻ ôn tập cho ngày hôm nay. Hãy tiếp tục với bò nhai cỏ nếu hôm nay có thẻ chưa thuộc.'}
+                  {!currentDeck
+                    ? 'Hãy chọn hoặc tạo học phần để bắt đầu học.'
+                    : reviewMode === 'retry'
+                      ? 'Các thẻ bạn trả lời sai trong hôm nay sẽ xuất hiện ở đây.'
+                      : 'Bạn có thể chọn học phần khác hoặc thêm thẻ mới.'}
                 </p>
                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap', marginTop: '1.5rem' }}>
-                  {reviewMode === 'main' && (
+                  {reviewMode === 'main' && retryCardsCount > 0 ? (
                     <button
                       className="btn btn-primary"
                       onClick={openRetryTab}
                     >
-                      Tiếp tục với bò nhai cỏ
+                      Tiếp tục với bò nhai cỏ ({retryCardsCount})
+                    </button>
+                  ) : (
+                    <button className="btn btn-primary" onClick={handleChooseDeck}>
+                      Chọn học phần
                     </button>
                   )}
                   <button 
-                    className="btn btn-primary"
+                    className="btn btn-secondary"
                     onClick={() => openAddTab('manual')}
                   >
                     Thêm thẻ mới
@@ -953,68 +939,7 @@ function App() {
             )}
           </div>
         )}
-      </main>
-
-        </div> {/* Đóng main-content */}
-      </div> {/* Đóng app-layout */}
-
-      <nav className="mobile-bottom-nav" aria-label="Điều hướng trên điện thoại">
-        <button
-          type="button"
-          className={activeTab === 'review' ? 'active' : ''}
-          onClick={openReviewTab}
-          aria-current={activeTab === 'review' ? 'page' : undefined}
-          aria-label="Ôn tập"
-          title="Ôn tập"
-        >
-          <BookOpen size={20} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className={activeTab === 'retry' ? 'active' : ''}
-          onClick={openRetryTab}
-          aria-current={activeTab === 'retry' ? 'page' : undefined}
-          aria-label="Học lại"
-          title="Học lại"
-        >
-          <RotateCcw size={20} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className={activeTab === 'manage' ? 'active' : ''}
-          onClick={() => setActiveTab('manage')}
-          aria-current={activeTab === 'manage' ? 'page' : undefined}
-          aria-label="Quản lý thẻ"
-          title="Quản lý thẻ"
-        >
-          <LibraryBig size={20} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className={activeTab === 'add' ? 'active' : ''}
-          onClick={() => openAddTab('manual')}
-          aria-current={activeTab === 'add' ? 'page' : undefined}
-          aria-label="Thêm từ"
-          title="Thêm từ"
-        >
-          <Plus size={20} aria-hidden="true" />
-        </button>
-      </nav>
-
-      {/* Popup Hướng dẫn sử dụng & Thuật toán SM-2 */}
-      <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
-
-      {showProfileModal && user && (
-        <ProfileModal
-          user={user}
-          onClose={closeProfileModal}
-          onSave={handleProfileSave}
-          onChangePassword={handlePasswordChange}
-          onLogout={handleLogout}
-          returnFocusRef={profileButtonRef}
-        />
-      )}
-    </div> // Đóng app-wrapper
+    </DesktopAppShell>
   );
 }
 
