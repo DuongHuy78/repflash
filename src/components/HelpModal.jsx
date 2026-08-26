@@ -49,7 +49,7 @@ const HELP_CONTENT = {
     shortcutDesc: 'Tăng tốc độ học gấp 3 lần mà không cần dùng chuột:',
     shortcuts: [
       { key: 'Space', desc: 'Lật mặt trước / mặt sau thẻ' },
-      { key: 'H', desc: 'Bật / tắt hiển thị cách đọc ở mặt trước (trước khi lật thẻ)' },
+      { key: 'G', desc: 'Bật / tắt hiển thị cách đọc ở mặt trước (trước khi lật thẻ)' },
       { key: 'A', desc: 'Đánh giá 1 - Lại (Again) (sau khi đã lật thẻ)' },
       { key: 'S', desc: 'Đánh giá 2 - Khó (Hard) (sau khi đã lật thẻ, chỉ vòng chính)' },
       { key: 'D', desc: 'Đánh giá 3 - Tốt (Good) (sau khi đã lật thẻ, chỉ vòng chính)' },
@@ -111,7 +111,7 @@ const HELP_CONTENT = {
     shortcutDesc: 'Speed up your learning 3x without using the mouse:',
     shortcuts: [
       { key: 'Space', desc: 'Flip front / back of card' },
-      { key: 'H', desc: 'Toggle pronunciation on front (before flipping card)' },
+      { key: 'G', desc: 'Toggle pronunciation on front (before flipping card)' },
       { key: 'A', desc: 'Rate 1 - Again (after flipping card)' },
       { key: 'S', desc: 'Rate 2 - Hard (after flipping card, main session only)' },
       { key: 'D', desc: 'Rate 3 - Good (after flipping card, main session only)' },
@@ -173,7 +173,7 @@ const HELP_CONTENT = {
     shortcutDesc: 'マウスを使わずに学習スピードを3倍にアップ：',
     shortcuts: [
       { key: 'Space', desc: 'カードをめくる（表 / 裏）' },
-      { key: 'H', desc: '表面の読み方を表示 / 非表示（めくる前）' },
+      { key: 'G', desc: '表面の読み方を表示 / 非表示（めくる前）' },
       { key: 'A', desc: '評価 1 - もう一度 (Again)（裏面表示後）' },
       { key: 'S', desc: '評価 2 - 難しい (Hard)（裏面表示後・通常復習のみ）' },
       { key: 'D', desc: '評価 3 - 良好 (Good)（裏面表示後・通常復習のみ）' },

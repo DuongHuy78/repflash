@@ -543,6 +543,20 @@ h1 {
   background: rgba(143, 139, 255, 0.18);
 }
 
+.flashcard-pronunciation-toggle__shortcut {
+  display: inline-flex;
+  min-width: 1.15rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  opacity: 0.85;
+}
+
 .flashcard-front-actions {
   display: flex;
   align-items: center;
@@ -3973,7 +3987,8 @@ kbd {
     display: inline;
   }
 
-  .review-score__shortcut {
+  .review-score__shortcut,
+  .flashcard-pronunciation-toggle__shortcut {
     display: none;
   }
 

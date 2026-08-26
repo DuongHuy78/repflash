@@ -199,9 +199,10 @@ const ReviewCard = ({
                       type="button"
                       className="flashcard-pronunciation-toggle"
                       onClick={handleTogglePronunciation}
-                      aria-keyshortcuts="H"
+                      aria-keyshortcuts="G"
                       aria-pressed={isPronunciationVisible}
                       aria-label={isPronunciationVisible ? 'Ẩn cách đọc' : 'Hiện cách đọc'}
+                      title={isPronunciationVisible ? 'Ẩn cách đọc (G)' : 'Hiện cách đọc (G)'}
                       tabIndex={isFlipped ? -1 : 0}
                       disabled={isFlipped}
                     >
@@ -209,6 +210,7 @@ const ReviewCard = ({
                         ? <EyeOff size={18} aria-hidden="true" />
                         : <Eye size={18} aria-hidden="true" />}
                       {isPronunciationVisible ? 'Ẩn cách đọc' : 'Hiện cách đọc'}
+                      <span className="flashcard-pronunciation-toggle__shortcut" aria-hidden="true">G</span>
                     </button>
                   )}
                   <button

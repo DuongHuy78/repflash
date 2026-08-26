@@ -621,7 +621,7 @@ function App() {
         return;
       }
 
-      if (key === 'h' && !isCardFlipped && currentCard.pronunciation?.trim()) {
+      if (key === 'g' && !isCardFlipped && currentCard.pronunciation?.trim()) {
         event.preventDefault();
         toggleCurrentCardPronunciation();
         return;
