@@ -121,6 +121,28 @@ test('completion action phụ thuộc mode và số thẻ retry', () => {
     mode: STUDY_MODE.RETRY,
     retryCardsCount: 0,
   }), 'finish');
+  assert.equal(getStudyCompletionAction({
+    mode: STUDY_MODE.NEW,
+    retryCardsCount: 2,
+  }), 'continue-retry');
+  assert.equal(getStudyCompletionAction({
+    mode: STUDY_MODE.NEW,
+    retryCardsCount: 0,
+  }), 'choose-deck');
+});
+
+test('new quality 1 hoàn thành thẻ giống vòng chính', () => {
+  const initial = createStudySessionState({
+    deckId: 'deck-1',
+    mode: STUDY_MODE.NEW,
+    cardCount: 3,
+  });
+  const next = recordReview(initial, 1);
+
+  assert.equal(next.attemptCount, 1);
+  assert.equal(next.againCount, 1);
+  assert.equal(next.completedCardCount, 1);
+  assert.equal(next.rememberedCount, 0);
 });
 
 test('hàng đợi có thẻ mới sau completion bắt đầu một session mới', () => {

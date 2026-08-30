@@ -15,11 +15,38 @@ import { getCardSpeechText } from './utils/cardContentUtils';
 import useStudySession from './hooks/useStudySession';
 import HelpModal from './components/HelpModal';
 import ProfileModal from './components/ProfileModal';
+import { STUDY_MODE } from './utils/studySessionUtils';
 
 const API_URL = (import.meta.env.VITE_API_URL || '') + '/api/cards';
 const RETRY_API_URL = `${API_URL}/retry`;
+const NEW_API_URL = `${API_URL}/new`;
 const DECK_API_URL = (import.meta.env.VITE_API_URL || '') + '/api/decks';
 const USER_API_URL = (import.meta.env.VITE_API_URL || '') + '/api/user';
+const EMPTY_NEW_QUEUE_META = {
+  limit: 20,
+  usedToday: 0,
+  remainingQuota: 0,
+  totalNew: 0,
+};
+
+const getNewQueueEmptyCopy = (meta) => {
+  if (meta.remainingQuota === 0 && meta.totalNew > 0) {
+    return {
+      title: 'Đã học đủ suất từ mới hôm nay',
+      body: `Bạn đã học ${meta.usedToday}/${meta.limit} từ mới. Còn ${meta.totalNew} thẻ chờ ngày mai.`,
+    };
+  }
+  if (meta.remainingQuota === 0) {
+    return {
+      title: 'Hôm nay bạn đã học hết suất từ mới',
+      body: 'Ngày mai sẽ có suất mới. Bạn có thể ôn tập hoặc thêm thẻ.',
+    };
+  }
+  return {
+    title: 'Học phần này chưa có thẻ mới',
+    body: 'Thêm thẻ thủ công hoặc nhập hàng loạt để bắt đầu hàng Từ mới.',
+  };
+};
 
 const isTypingTarget = (target) => {
   if (!(target instanceof HTMLElement)) return false;
@@ -46,10 +73,13 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [retryCardsCount, setRetryCardsCount] = useState(0);
+  const [newQueueMeta, setNewQueueMeta] = useState(EMPTY_NEW_QUEUE_META);
   const [sessionMilestone, setSessionMilestone] = useState(null);
   const [currentDeck, setCurrentDeck] = useState(() => {
     return localStorage.getItem('currentDeck') || '';
   });
+  const [activeTab, setActiveTab] = useState('add'); // 'review', 'new', 'retry', 'manage', 'add'
+  const [addMode, setAddMode] = useState('manual');
   
   // Biến này trả về true nếu có token, false nếu chưa có
   const isAuthenticated = !!token; 
@@ -73,6 +103,8 @@ function App() {
     axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
     setAuthMessage('');
     setAuthErrorMessage('');
+    setActiveTab('add');
+    setAddMode('manual');
   };
 
   // Xóa toàn bộ dữ liệu phụ thuộc vào phiên đăng nhập.
@@ -192,9 +224,6 @@ function App() {
     return () => window.clearTimeout(timeoutId);
   }, [isAuthenticated, fetchUserProfile]);
 
-  const [activeTab, setActiveTab] = useState('review'); // 'review', 'retry', 'manage', 'add'
-  const [addMode, setAddMode] = useState('manual');
-  
   const [newDeckName, setNewDeckName] = useState('');
   const [newDeckLanguage, setNewDeckLanguage] = useState('ja-JP');
   const [availableLanguages, setAvailableLanguages] = useState([]);
@@ -301,6 +330,7 @@ function App() {
       }
       fetchDecks();
       if (activeTab === 'review') fetchDueCards();
+      else if (activeTab === 'new') fetchNewCards();
       else if (activeTab === 'retry') fetchRetryCards();
     } catch (error) {
       console.error("Lỗi xóa học phần:", error);
@@ -329,8 +359,13 @@ function App() {
   const currentCardId = currentCard?._id;
   const currentDeckObject = decks.find((deck) => deck._id === currentDeck);
   const currentDeckLanguage = currentDeckObject?.language || 'ja-JP';
-  const reviewMode = activeTab === 'retry' ? 'retry' : 'main';
-  const isStudyTab = ['review', 'retry'].includes(activeTab);
+  const reviewMode = activeTab === 'retry'
+    ? STUDY_MODE.RETRY
+    : activeTab === 'new'
+      ? STUDY_MODE.NEW
+      : STUDY_MODE.MAIN;
+  const isStudyTab = ['review', 'new', 'retry'].includes(activeTab);
+  const defaultPronunciationVisible = reviewMode === STUDY_MODE.NEW;
   const {
     session: studySession,
     progress: sessionProgress,
@@ -362,7 +397,7 @@ function App() {
   const isCardEditing = isCurrentCardUiState ? cardUiState.isEditing : false;
   const isPronunciationVisible = isCurrentCardUiState
     ? cardUiState.isPronunciationVisible
-    : false;
+    : defaultPronunciationVisible;
 
   const setIsCardFlipped = useCallback((nextValue) => {
     setCardUiState((state) => {
@@ -373,10 +408,12 @@ function App() {
         cardId: currentCardId,
         isFlipped: resolveStateUpdate(nextValue, currentFlipped),
         isEditing: isCurrent ? state.isEditing : false,
-        isPronunciationVisible: isCurrent ? state.isPronunciationVisible : false,
+        isPronunciationVisible: isCurrent
+          ? state.isPronunciationVisible
+          : defaultPronunciationVisible,
       };
     });
-  }, [currentCardId]);
+  }, [currentCardId, defaultPronunciationVisible]);
 
   const setIsCardEditing = useCallback((nextValue) => {
     setCardUiState((state) => {
@@ -387,10 +424,12 @@ function App() {
         cardId: currentCardId,
         isFlipped: isCurrent ? state.isFlipped : false,
         isEditing: resolveStateUpdate(nextValue, currentEditing),
-        isPronunciationVisible: isCurrent ? state.isPronunciationVisible : false,
+        isPronunciationVisible: isCurrent
+          ? state.isPronunciationVisible
+          : defaultPronunciationVisible,
       };
     });
-  }, [currentCardId]);
+  }, [currentCardId, defaultPronunciationVisible]);
 
   const toggleCurrentCardPronunciation = useCallback(() => {
     setCardUiState((state) => {
@@ -400,10 +439,12 @@ function App() {
         cardId: currentCardId,
         isFlipped: isCurrent ? state.isFlipped : false,
         isEditing: isCurrent ? state.isEditing : false,
-        isPronunciationVisible: isCurrent ? !state.isPronunciationVisible : true,
+        isPronunciationVisible: isCurrent
+          ? !state.isPronunciationVisible
+          : !defaultPronunciationVisible,
       };
     });
-  }, [currentCardId]);
+  }, [currentCardId, defaultPronunciationVisible]);
 
   const fetchRetryCount = useCallback(async () => {
     if (!currentDeck) {
@@ -475,6 +516,38 @@ function App() {
     }
   }, [currentDeck]);
 
+  const fetchNewCards = useCallback(async () => {
+    if (!currentDeck) {
+      setCards([]);
+      setNewQueueMeta(EMPTY_NEW_QUEUE_META);
+      setSessionMilestone(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setLoadError('');
+    setSessionMilestone(null);
+    try {
+      const res = await axios.get(NEW_API_URL, {
+        params: { deckId: currentDeck },
+      });
+      const payload = res.data && typeof res.data === 'object' ? res.data : {};
+      setCards(Array.isArray(payload.cards) ? payload.cards : []);
+      setNewQueueMeta({
+        limit: Number(payload.limit) || 20,
+        usedToday: Number(payload.usedToday) || 0,
+        remainingQuota: Number(payload.remainingQuota) || 0,
+        totalNew: Number(payload.totalNew) || 0,
+      });
+      await fetchRetryCount();
+    } catch (error) {
+      console.error('Error fetching new cards:', error);
+      setLoadError('Không tải được danh sách từ mới. Hãy kiểm tra backend đang chạy ở cổng 6000.');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentDeck, fetchRetryCount]);
+
   const handleRandomQuote = useCallback(() => {
     setCurrentQuote((quote) => {
       let newQuote;
@@ -488,11 +561,12 @@ function App() {
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       if (activeTab === 'review') fetchDueCards();
+      else if (activeTab === 'new') fetchNewCards();
       else if (activeTab === 'retry') fetchRetryCards();
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [fetchDueCards, fetchRetryCards, activeTab, currentDeck]);
+  }, [fetchDueCards, fetchNewCards, fetchRetryCards, activeTab, currentDeck]);
 
   const openReviewTab = useCallback(() => {
     setIsFullscreenFlow(false);
@@ -517,6 +591,18 @@ function App() {
       setActiveTab('retry');
     }
   }, [activeTab, fetchRetryCards]);
+
+  const openNewTab = useCallback(() => {
+    setIsFullscreenFlow(false);
+    if (activeTab === 'new') fetchNewCards();
+    else {
+      setCards([]);
+      setLoading(true);
+      setLoadError('');
+      setIsDeckDrawerOpen(false);
+      setActiveTab('new');
+    }
+  }, [activeTab, fetchNewCards]);
 
   const openManageTab = useCallback(() => {
     setIsFullscreenFlow(false);
@@ -560,16 +646,16 @@ function App() {
         const reviewedCard = currentCards.find(card => card._id === id);
         const remainingCards = currentCards.filter(card => card._id !== id);
 
-        if (reviewMode === 'retry' && quality === 1 && (updatedCard || reviewedCard)) {
+        if (reviewMode === STUDY_MODE.RETRY && quality === 1 && (updatedCard || reviewedCard)) {
           return [...remainingCards, updatedCard || reviewedCard];
         }
 
         return remainingCards;
       });
 
-      if (reviewMode === 'main' && quality === 1) {
+      if ((reviewMode === STUDY_MODE.MAIN || reviewMode === STUDY_MODE.NEW) && quality === 1) {
         setRetryCardsCount((count) => count + 1);
-      } else if (reviewMode === 'retry' && quality === 3) {
+      } else if (reviewMode === STUDY_MODE.RETRY && quality === 3) {
         setRetryCardsCount((count) => Math.max(0, count - 1));
       }
       setIsCardFlipped(false);
@@ -602,7 +688,7 @@ function App() {
       if (isTypingTarget(event.target) || isCardEditing) return;
 
       const canUseReviewShortcuts =
-        ['review', 'retry'].includes(activeTab) &&
+        ['review', 'new', 'retry'].includes(activeTab) &&
         currentCard &&
         !loading &&
         !loadError;
@@ -646,7 +732,7 @@ function App() {
 
       // Trong chế độ retry chỉ dùng shortcut A (1) và F (3)
       let quality;
-      if (reviewMode === 'retry') {
+      if (reviewMode === STUDY_MODE.RETRY) {
         const retryShortcuts = { a: 1, f: 3 };
         quality = retryShortcuts[key];
       } else {
@@ -694,7 +780,7 @@ function App() {
     try {
       await axios.delete(`${API_URL}/${id}`);
       setCards((currentCards) => currentCards.filter(card => card._id !== id));
-      if (reviewMode === 'retry') {
+      if (reviewMode === STUDY_MODE.RETRY) {
         setRetryCardsCount((count) => Math.max(0, count - 1));
       }
     } catch (error) {
@@ -788,6 +874,7 @@ function App() {
       isFocusedStudy={isFocusedStudy}
       isFullscreenFlow={isFullscreenFlow}
       onOpenReview={openReviewTab}
+      onOpenNew={openNewTab}
       onOpenRetry={openRetryTab}
       onOpenManage={openManageTab}
       onOpenAdd={() => openAddTab('manual')}
@@ -814,8 +901,8 @@ function App() {
             currentDeckLanguage={currentDeckLanguage}
             mode={addMode}
             onModeChange={setAddMode}
-            onManualCreated={fetchDueCards}
-            onBulkImported={openReviewTab}
+            onManualCreated={openNewTab}
+            onBulkImported={openNewTab}
             onFullscreenChange={setIsFullscreenFlow}
           />
         )}
@@ -836,7 +923,16 @@ function App() {
               <div className="glass-card empty-state error-state">
                 <h3>Không kết nối được backend</h3>
                 <p>{loadError}</p>
-                <button className="btn btn-primary" onClick={activeTab === 'retry' ? fetchRetryCards : fetchDueCards}>
+                <button
+                  className="btn btn-primary"
+                  onClick={
+                    activeTab === 'retry'
+                      ? fetchRetryCards
+                      : activeTab === 'new'
+                        ? fetchNewCards
+                        : fetchDueCards
+                  }
+                >
                   Thử lại
                 </button>
               </div>
@@ -849,9 +945,11 @@ function App() {
                 />
                 <div className="glass-card review-panel">
                   <div className="review-progress">
-                    {reviewMode === 'retry'
+                    {reviewMode === STUDY_MODE.RETRY
                       ? `Còn ${cards.length} thẻ cần nhai lại trong hôm nay`
-                      : `Còn ${cards.length} thẻ cần ôn tập hôm nay`}
+                      : reviewMode === STUDY_MODE.NEW
+                        ? `Còn ${cards.length} từ mới hôm nay · nhìn từ, tự nhẩm, rồi lật`
+                        : `Còn ${cards.length} thẻ cần ôn tập hôm nay`}
                   </div>
                   {/* Chỉ hiển thị thẻ đầu tiên trong danh sách để học */}
                   <ReviewCard
@@ -898,6 +996,10 @@ function App() {
                 retryCardsCount={retryCardsCount}
                 currentStreak={user?.currentStreak || 0}
                 newMilestone={sessionMilestone}
+                moreNewRemaining={
+                  reviewMode === STUDY_MODE.NEW
+                  && newQueueMeta.totalNew > studySession.initialCardCount
+                }
                 onContinueRetry={openRetryTab}
                 onChooseDeck={handleChooseDeck}
                 onOpenManage={openManageTab}
@@ -907,36 +1009,67 @@ function App() {
                 <h3>
                   {!currentDeck
                     ? 'Chưa chọn học phần'
-                    : reviewMode === 'retry'
+                    : reviewMode === STUDY_MODE.RETRY
                       ? 'Chưa có thẻ cần nhai lại'
-                      : 'Hôm nay không còn thẻ đến hạn'}
+                      : reviewMode === STUDY_MODE.NEW
+                        ? getNewQueueEmptyCopy(newQueueMeta).title
+                        : 'Hôm nay không còn thẻ đến hạn'}
                 </h3>
                 <p>
                   {!currentDeck
                     ? 'Hãy chọn hoặc tạo học phần để bắt đầu học.'
-                    : reviewMode === 'retry'
+                    : reviewMode === STUDY_MODE.RETRY
                       ? 'Các thẻ bạn trả lời sai trong hôm nay sẽ xuất hiện ở đây.'
-                      : 'Bạn có thể chọn học phần khác hoặc thêm thẻ mới.'}
+                      : reviewMode === STUDY_MODE.NEW
+                        ? getNewQueueEmptyCopy(newQueueMeta).body
+                        : 'Bạn có thể chọn học phần khác, học từ mới, hoặc thêm thẻ.'}
                 </p>
                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap', marginTop: '1.5rem' }}>
-                  {reviewMode === 'main' && retryCardsCount > 0 ? (
+                  {retryCardsCount > 0 && reviewMode !== STUDY_MODE.RETRY ? (
                     <button
                       className="btn btn-primary"
                       onClick={openRetryTab}
                     >
                       Tiếp tục với bò nhai cỏ ({retryCardsCount})
                     </button>
+                  ) : reviewMode === STUDY_MODE.NEW
+                    && newQueueMeta.totalNew === 0
+                    && newQueueMeta.remainingQuota > 0 ? (
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => openAddTab('manual')}
+                    >
+                      Thêm thẻ mới
+                    </button>
+                  ) : reviewMode === STUDY_MODE.NEW ? (
+                    <button className="btn btn-primary" onClick={openReviewTab}>
+                      Ôn tập
+                    </button>
                   ) : (
                     <button className="btn btn-primary" onClick={handleChooseDeck}>
                       Chọn học phần
                     </button>
                   )}
-                  <button 
-                    className="btn btn-secondary"
-                    onClick={() => openAddTab('manual')}
-                  >
-                    Thêm thẻ mới
-                  </button>
+                  {reviewMode === STUDY_MODE.MAIN && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={openNewTab}
+                    >
+                      Học từ mới
+                    </button>
+                  )}
+                  {!(
+                    reviewMode === STUDY_MODE.NEW
+                    && newQueueMeta.totalNew === 0
+                    && newQueueMeta.remainingQuota > 0
+                  ) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => openAddTab('manual')}
+                    >
+                      Thêm thẻ mới
+                    </button>
+                  )}
                 </div>
               </div>
             )}

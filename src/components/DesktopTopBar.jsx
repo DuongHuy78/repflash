@@ -17,34 +17,38 @@ const DesktopTopBar = ({
   return (
     <header className="app-header">
       <div className="app-brand">
-        <h1>Flashcard App</h1>
+        <h1>Repflash</h1>
         <p className="subtitle">Học từ vựng hiệu quả vào đúng thời điểm</p>
       </div>
 
       <div className="app-header-actions">
-        {user && streakConfig && (
-          <div
-            className={`streak-badge ${streakConfig.badgeClass}`}
-            title={`Danh hiệu: ${streakConfig.title} | Kỷ lục: ${user.longestStreak || 0} ngày`}
-          >
-            <span className="streak-icon">{streakConfig.icon}</span>
-            <span className="streak-count">{user.currentStreak || 0}</span>
-            <span className="streak-label">ngày</span>
-          </div>
-        )}
-
         {user && (
-          <button
-            ref={profileButtonRef}
-            type="button"
-            className="profile-trigger"
-            onClick={onOpenProfile}
-            aria-haspopup="dialog"
-            aria-expanded={showProfileModal}
-          >
-            <UserRound size={18} aria-hidden="true" />
-            <span>{user.username}</span>
-          </button>
+          <div className="app-header-identity">
+            {streakConfig && (
+              <div
+                className={`streak-badge ${streakConfig.badgeClass}`}
+                title={`Danh hiệu: ${streakConfig.title} | Kỷ lục: ${user.longestStreak || 0} ngày`}
+              >
+                <span className="streak-icon">{streakConfig.icon}</span>
+                <span className="streak-count">{user.currentStreak || 0}</span>
+                <span className="streak-label">ngày</span>
+              </div>
+            )}
+
+            <button
+              ref={profileButtonRef}
+              type="button"
+              className="profile-trigger"
+              onClick={onOpenProfile}
+              title={user.username}
+              aria-label={`Tài khoản ${user.username}`}
+              aria-haspopup="dialog"
+              aria-expanded={showProfileModal}
+            >
+              <UserRound size={18} aria-hidden="true" />
+              <span>{user.username}</span>
+            </button>
+          </div>
         )}
 
         <div className="help-btn-wrapper">

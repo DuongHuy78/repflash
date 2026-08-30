@@ -8,7 +8,7 @@ const HELP_CONTENT = {
     introTitle: '🌟 1. Giới thiệu & Mục tiêu Dự án',
     introDesc: (
       <>
-        Chào mừng bạn đến với <strong>Flashcard App</strong>! Ứng dụng giúp bạn <strong>học ít hơn - nhớ lâu hơn</strong> nhờ phương pháp <strong>Spaced Repetition (Lặp lại ngắt quãng)</strong>. Hệ thống sẽ tự động tính toán thời điểm bạn sắp quên để nhắc bạn ôn tập!
+        Chào mừng bạn đến với <strong>repflash</strong>! Ứng dụng giúp bạn <strong>học ít hơn - nhớ lâu hơn</strong> nhờ phương pháp <strong>Spaced Repetition (Lặp lại ngắt quãng)</strong>. Hệ thống sẽ tự động tính toán thời điểm bạn sắp quên để nhắc bạn ôn tập!
       </>
     ),
     sm2Title: '🧠 2. Thuật toán Spaced Repetition (SM-2)',
@@ -33,19 +33,27 @@ const HELP_CONTENT = {
       badge: '4 - Dễ (Easy)',
       desc: 'Thuộc lòng. Khoảng thời gian lặp lại tăng mạnh để bạn không tốn thời gian ôn lại sớm.',
     },
-    retryTitle: '🐮 3. Chế độ "Bò nhai cỏ" (Same-Day Retry)',
+    newCardsTitle: '🌱 3. Từ mới',
+    newCardsDesc: (
+      <>
+        Thẻ vừa thêm hoặc import vào tab <strong>Từ mới</strong>, không tràn vào Ôn tập.
+        Mỗi ngày mỗi học phần có hạn mức (mặc định 20). Lần đầu hãy nhìn từ 5–10 giây,
+        tự nhẩm; cách đọc hiện sẵn, nghĩa chỉ hiện khi lật. <strong>Lại</strong> đưa thẻ vào Bò nhai cỏ.
+      </>
+    ),
+    retryTitle: '🐮 4. Chế độ "Bò nhai cỏ" (Same-Day Retry)',
     retryDesc: (
       <>
         Những từ vựng bạn đánh dấu <strong>Lại (1)</strong> sẽ được tập hợp trong tab <strong>Bò nhai cỏ</strong>. Bạn có thể "nhai đi nhai lại" các từ này nhiều lần trong ngày cho đến khi nhớ hẳn!
       </>
     ),
-    streakTitle: '🔥 4. Hệ thống Chuỗi ngày học (Streak)',
+    streakTitle: '🔥 5. Hệ thống Chuỗi ngày học (Streak)',
     streakDesc: (
       <>
         Chỉ cần học ít nhất 1 thẻ mỗi ngày, bạn sẽ duy trì chuỗi <strong>Streak 🔥</strong>. Tích lũy chuỗi ngày liên tục để nâng cấp danh hiệu lửa và mở khóa các mốc thành tựu!
       </>
     ),
-    shortcutTitle: '⌨️ 5. Phím tắt thao tác nhanh (Keyboard Shortcuts)',
+    shortcutTitle: '⌨️ 6. Phím tắt thao tác nhanh (Keyboard Shortcuts)',
     shortcutDesc: 'Tăng tốc độ học gấp 3 lần mà không cần dùng chuột:',
     shortcuts: [
       { key: 'Space', desc: 'Lật mặt trước / mặt sau thẻ' },
@@ -61,6 +69,7 @@ const HELP_CONTENT = {
     shortcutNotes: [
       'Phím đánh giá (A, S, D, F) chỉ có tác dụng sau khi bạn đã lật sang mặt sau của thẻ.',
       'Ở chế độ "Bò nhai cỏ", chỉ dùng 2 phím: A (Lại - 1) và F (Đã nhớ - 3).',
+      'Từ mới dùng 4 phím A/S/D/F như Ôn tập. Cách đọc hiện sẵn; G để ẩn hoặc hiện lại.',
       'Tất cả phím tắt sẽ tự động bị vô hiệu hóa khi con trỏ đang ở trong ô nhập liệu (input, textarea).',
     ],
   },
@@ -70,7 +79,7 @@ const HELP_CONTENT = {
     introTitle: '🌟 1. Introduction & Project Goal',
     introDesc: (
       <>
-        Welcome to <strong>Flashcard App</strong>! Learn <strong>less - remember longer</strong> with the <strong>Spaced Repetition</strong> method. The system automatically calculates when you are about to forget so you can review at the right time!
+        Welcome to <strong>repflash</strong>! Learn <strong>less - remember longer</strong> with the <strong>Spaced Repetition</strong> method. The system automatically calculates when you are about to forget so you can review at the right time!
       </>
     ),
     sm2Title: '🧠 2. Spaced Repetition Algorithm (SM-2)',
@@ -95,19 +104,27 @@ const HELP_CONTENT = {
       badge: '4 - Easy',
       desc: 'Perfect recall. Interval increases significantly so you don\'t waste time reviewing too early.',
     },
-    retryTitle: '🐮 3. "Same-Day Retry" Mode',
+    newCardsTitle: '🌱 3. New cards',
+    newCardsDesc: (
+      <>
+        Newly added or imported cards go to the <strong>New</strong> tab, not Review.
+        Each deck has a daily cap (default 20). Spend 5–10 seconds on the word first;
+        pronunciation is visible, meaning stays hidden until you flip. <strong>Again</strong> sends the card to Same-Day Retry.
+      </>
+    ),
+    retryTitle: '🐮 4. "Same-Day Retry" Mode',
     retryDesc: (
       <>
         Words marked as <strong>Again (1)</strong> are gathered in the <strong>Same-Day Retry</strong> tab. Review them multiple times throughout the day until fully memorized!
       </>
     ),
-    streakTitle: '🔥 4. Daily Streak System',
+    streakTitle: '🔥 5. Daily Streak System',
     streakDesc: (
       <>
         Study at least 1 card daily to maintain your <strong>Streak 🔥</strong>. Accumulate consecutive days to upgrade fire badges and unlock achievements!
       </>
     ),
-    shortcutTitle: '⌨️ 5. Quick Keyboard Shortcuts',
+    shortcutTitle: '⌨️ 6. Quick Keyboard Shortcuts',
     shortcutDesc: 'Speed up your learning 3x without using the mouse:',
     shortcuts: [
       { key: 'Space', desc: 'Flip front / back of card' },
@@ -123,6 +140,7 @@ const HELP_CONTENT = {
     shortcutNotes: [
       'Rating shortcuts (A, S, D, F) only work after flipping to the back of the card.',
       'In "Same-Day Retry" mode, only 2 keys are active: A (Again - 1) and F (Remembered - 3).',
+      'New cards use A/S/D/F like Review. Pronunciation starts visible; press G to hide or show it.',
       'All shortcuts are automatically disabled while typing in text inputs or textareas.',
     ],
   },
@@ -132,7 +150,7 @@ const HELP_CONTENT = {
     introTitle: '🌟 1. 概要とプロジェクトの目的',
     introDesc: (
       <>
-        <strong>Flashcard App</strong>へようこそ！<strong>間隔反復（Spaced Repetition）</strong>メソッドにより、「<strong>効率的に学んで長期間記憶する</strong>」ことをサポートします。忘れる直前のタイミングをシステムが自動計算して復習を促します！
+        <strong>repflash</strong>へようこそ！<strong>間隔反復（Spaced Repetition）</strong>メソッドにより、「<strong>効率的に学んで長期間記憶する</strong>」ことをサポートします。忘れる直前のタイミングをシステムが自動計算して復習を促します！
       </>
     ),
     sm2Title: '🧠 2. 間隔反復アルゴリズム (SM-2)',
@@ -157,19 +175,27 @@ const HELP_CONTENT = {
       badge: '4 - 簡単 (Easy)',
       desc: '完璧に覚えている単語。間隔が大幅に伸び、早すぎる復習を省きます。',
     },
-    retryTitle: '🐮 3. 当日復習モード (Same-Day Retry)',
+    newCardsTitle: '🌱 3. 新規カード',
+    newCardsDesc: (
+      <>
+        追加・インポートしたカードは「<strong>新規</strong>」タブに入り、通常復習には混ざりません。
+        デッキごとに1日の上限があります（既定20）。最初は5〜10秒見て音読を。読みは最初から表示、意味は裏面だけ。
+        「<strong>もう一度</strong>」は当日復習へ送られます。
+      </>
+    ),
+    retryTitle: '🐮 4. 当日復習モード (Same-Day Retry)',
     retryDesc: (
       <>
         「<strong>もう一度 (1)</strong>」と評価した単語は「<strong>当日復習</strong>」タブに集まります。完全に覚えるまで1日に何度も繰り返し復習できます！
       </>
     ),
-    streakTitle: '🔥 4. 連続学習ストリーク (Streak)',
+    streakTitle: '🔥 5. 連続学習ストリーク (Streak)',
     streakDesc: (
       <>
         毎日少なくとも1枚カードを学習して <strong>Streak 🔥</strong> を維持しましょう。連続日数を増やして炎バッジをグレードアップ！
       </>
     ),
-    shortcutTitle: '⌨️ 5. ショートカットキー',
+    shortcutTitle: '⌨️ 6. ショートカットキー',
     shortcutDesc: 'マウスを使わずに学習スピードを3倍にアップ：',
     shortcuts: [
       { key: 'Space', desc: 'カードをめくる（表 / 裏）' },
@@ -185,6 +211,7 @@ const HELP_CONTENT = {
     shortcutNotes: [
       '評価キー（A, S, D, F）はカードを裏返した後にのみ動作します。',
       '「当日復習」モードでは、A（もう一度 - 1）と F（覚えた - 3）の2キーのみ使用します。',
+      '新規カードは通常復習と同じく A/S/D/F。読みは最初から表示され、G で切り替えます。',
       '入力フォーム（input, textarea）にフォーカスがある間は、ショートカットは自動的に無効化されます。',
     ],
   },
@@ -263,7 +290,12 @@ const HelpModal = ({ isOpen, onClose }) => {
             </div>
           </section>
 
-          {/* Section 3: Retry mode */}
+          <section className="help-section">
+            <h3>{content.newCardsTitle}</h3>
+            <p>{content.newCardsDesc}</p>
+          </section>
+
+          {/* Section 4: Retry mode */}
           <section className="help-section">
             <h3>{content.retryTitle}</h3>
             <p>{content.retryDesc}</p>

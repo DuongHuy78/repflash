@@ -31,7 +31,7 @@ const ReviewCard = ({
   onReview,
   onEdit,
   onDelete,
-  reviewMode = 'main', // 'main' hoặc 'retry'
+  reviewMode = 'main', // 'main' | 'retry' | 'new'
   currentDeckLanguage = 'ja-JP',
 }) => {
   const [editFront, setEditFront] = useState(card.front);

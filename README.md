@@ -1,16 +1,45 @@
-# React + Vite
+# Flashcard App - Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Frontend React 19 + Vite cho ứng dụng học flashcard theo Spaced Repetition
+(SM-2 tùy biến). Ứng dụng hỗ trợ tài khoản, học phần đa ngôn ngữ, TTS, import
+hàng loạt, quản lý thẻ và hai vòng học Main/Retry (Bò nhai cỏ).
 
-Currently, two official plugins are available:
+## Yêu cầu
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Node.js phù hợp với Vite 8.
+- `pnpm`; repository này dùng `pnpm-lock.yaml`, không dùng npm/yarn.
+- Backend chạy ở cổng 6000 khi phát triển.
 
-## React Compiler
+## Chạy dự án
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```powershell
+pnpm install
+pnpm dev
+```
 
-## Expanding the ESLint configuration
+Vite chạy ở `http://localhost:7000` và proxy request `/api` tới
+`http://127.0.0.1:6000`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Kiểm tra
+
+```powershell
+pnpm test
+pnpm lint
+pnpm build
+```
+
+- `pnpm test`: chạy 19 unit test thuần bằng `node:test`.
+- `pnpm lint`: kiểm tra ESLint.
+- `pnpm build`: tạo bản production trong `dist/`; backend có thể phục vụ thư
+  mục này để chạy cả ứng dụng trên một cổng.
+
+## Cấu trúc chính
+
+- `src/App.jsx`: state, gọi API và điều phối phiên học.
+- `src/components/`: app shell, auth/profile, quản lý deck/thẻ và giao diện học.
+- `src/hooks/`: focus dialog và state phiên học.
+- `src/utils/`: chuẩn hóa nội dung, import, TTS, streak và reducer phiên học.
+- `test/`: test cho nội dung/import và phiên Main/Retry.
+
+Tài liệu kiến trúc đầy đủ nằm ở `../SystemDesign.txt`; quy trình làm việc nằm ở
+`../Chat.txt`. Khi tài liệu lệch code, ưu tiên code rồi cập nhật lại tài liệu.

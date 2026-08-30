@@ -1,4 +1,4 @@
-import { BookOpen, Folder, LibraryBig, Plus, RotateCcw, X } from 'lucide-react';
+import { BookOpen, Folder, LibraryBig, Plus, RotateCcw, Sprout, X } from 'lucide-react';
 import { FALLBACK_DECK_LANGUAGES } from '../constants/deckLanguages';
 
 const DesktopSidebar = ({
@@ -27,6 +27,7 @@ const DesktopSidebar = ({
   activeTab,
   cardsCount,
   onOpenReview,
+  onOpenNew,
   onOpenRetry,
   onOpenManage,
   onOpenAdd,
@@ -52,7 +53,7 @@ const DesktopSidebar = ({
       </button>
 
       <div className="sidebar-inner">
-        <div className="sidebar-brand">Flashcard App</div>
+        <div className="sidebar-brand">Repflash</div>
 
         <nav className="sidebar-primary-nav" aria-label="Điều hướng nội dung">
           <button
@@ -64,6 +65,18 @@ const DesktopSidebar = ({
             <BookOpen size={17} aria-hidden="true" />
             <span>Ôn tập</span>
             {activeTab === 'review' && cardsCount > 0 && (
+              <span className="sidebar-nav-count">{cardsCount}</span>
+            )}
+          </button>
+          <button
+            type="button"
+            className={`sidebar-nav-item${activeTab === 'new' ? ' active' : ''}`}
+            onClick={onOpenNew}
+            aria-current={activeTab === 'new' ? 'page' : undefined}
+          >
+            <Sprout size={17} aria-hidden="true" />
+            <span>Từ mới</span>
+            {activeTab === 'new' && cardsCount > 0 && (
               <span className="sidebar-nav-count">{cardsCount}</span>
             )}
           </button>

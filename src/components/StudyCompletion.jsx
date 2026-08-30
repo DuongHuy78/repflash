@@ -14,12 +14,14 @@ const StudyCompletion = ({
   retryCardsCount,
   currentStreak = 0,
   newMilestone,
+  moreNewRemaining = false,
   onContinueRetry,
   onChooseDeck,
   onOpenManage,
 }) => {
   const action = getStudyCompletionAction({ mode, retryCardsCount });
   const isRetry = mode === 'retry';
+  const isNew = mode === 'new';
 
   const primaryAction = {
     'continue-retry': {
@@ -46,13 +48,23 @@ const StudyCompletion = ({
         <Trophy size={34} />
       </div>
       <div className="study-completion__heading">
-        <h2>{isRetry ? 'Đã hoàn thành bò nhai cỏ!' : 'Hoàn thành phiên ôn tập!'}</h2>
+        <h2>
+          {isRetry
+            ? 'Đã hoàn thành bò nhai cỏ!'
+            : isNew
+              ? 'Đã học xong suất từ mới hôm nay!'
+              : 'Hoàn thành phiên ôn tập!'}
+        </h2>
         <p>
           {isRetry
             ? 'Bạn đã xử lý xong các thẻ cần học lại trong hôm nay.'
             : retryCardsCount > 0
               ? `Còn ${retryCardsCount} thẻ cần nhai lại trong hôm nay.`
-              : 'Bạn đã hoàn thành tất cả thẻ cần học hôm nay.'}
+              : isNew
+                ? moreNewRemaining
+                  ? 'Suất hôm nay đã hết. Còn thẻ mới, ngày mai học tiếp.'
+                  : 'Bạn đã học xong suất từ mới hôm nay.'
+                : 'Bạn đã hoàn thành tất cả thẻ cần học hôm nay.'}
         </p>
       </div>
 

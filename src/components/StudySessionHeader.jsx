@@ -1,7 +1,11 @@
 import { X } from 'lucide-react';
 
 const StudySessionHeader = ({ mode, progress, onExit }) => {
-  const title = mode === 'retry' ? 'Bò nhai cỏ' : 'Ôn tập';
+  const title = mode === 'retry'
+    ? 'Bò nhai cỏ'
+    : mode === 'new'
+      ? 'Từ mới'
+      : 'Ôn tập';
   const progressLabel = progress.total > 0
     ? `${progress.current} / ${progress.total}`
     : '0 / 0';

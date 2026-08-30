@@ -15,6 +15,7 @@ const DesktopAppShell = ({
   activeTab,
   cardsCount,
   onOpenReview,
+  onOpenNew,
   onOpenRetry,
   onOpenManage,
   onOpenAdd,
@@ -52,6 +53,7 @@ const DesktopAppShell = ({
           activeTab={activeTab}
           cardsCount={cardsCount}
           onOpenReview={onOpenReview}
+          onOpenNew={onOpenNew}
           onOpenRetry={onOpenRetry}
           onOpenManage={onOpenManage}
           onOpenAdd={onOpenAdd}
@@ -66,6 +68,7 @@ const DesktopAppShell = ({
         activeTab={activeTab}
         hidden={hideMobileChrome}
         onOpenReview={onOpenReview}
+        onOpenNew={onOpenNew}
         onOpenRetry={onOpenRetry}
         onOpenManage={onOpenManage}
         onOpenAdd={onOpenAdd}

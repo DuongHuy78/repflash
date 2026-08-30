@@ -126,7 +126,7 @@ const AuthPage = ({
     ? 'Quên mật khẩu'
     : isResetPassword
       ? 'Đặt lại mật khẩu'
-      : 'Flashcard App';
+      : 'repflash';
 
   const subtitle = isForgotPassword
     ? 'Nhập email đã đăng ký để nhận hướng dẫn đặt lại mật khẩu.'

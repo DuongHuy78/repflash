@@ -1,6 +1,7 @@
 export const STUDY_MODE = {
   MAIN: 'main',
   RETRY: 'retry',
+  NEW: 'new',
 };
 
 export const STUDY_SESSION_STATUS = {
@@ -121,5 +122,6 @@ export const getStudyProgress = (session) => {
 
 export const getStudyCompletionAction = ({ mode, retryCardsCount = 0 }) => {
   if (mode === STUDY_MODE.RETRY) return 'finish';
+  // Ôn tập và Từ mới: Again đã vào bò nhai cỏ thì ưu tiên tiếp tục nhai.
   return retryCardsCount > 0 ? 'continue-retry' : 'choose-deck';
 };
