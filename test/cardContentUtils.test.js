@@ -180,3 +180,11 @@ test('buildAiPrompt: tạo prompt chuẩn kèm ngôn ngữ học phần', () => 
   assert.match(enPrompt, /IPA/);
 });
 
+test('buildAiPrompt: tiếng Nhật có quy tắc âm Hán tự và tách thẻ theo mẫu nghĩa', () => {
+  const jaPrompt = buildAiPrompt('ja-JP');
+  assert.match(jaPrompt, /Âm Hán tự/i);
+  assert.match(jaPrompt, /GIÁC NGỘ/);
+  assert.match(jaPrompt, /TÁCH THÀNH CÁC DÒNG THẺ RIÊNG BIỆT/);
+});
+
+

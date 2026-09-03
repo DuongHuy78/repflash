@@ -2172,6 +2172,11 @@ kbd {
   font-weight: 600;
 }
 
+.status-badge--new {
+  background: rgba(143, 139, 255, 0.14);
+  color: var(--color-primary-soft);
+}
+
 .status-badge--active {
   background: rgba(96, 165, 250, 0.14);
   color: #93c5fd;

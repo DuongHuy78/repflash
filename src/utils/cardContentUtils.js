@@ -79,6 +79,26 @@ export const hasCardValidationErrors = (errors = {}) => (
 
 export const buildAiPrompt = (language = 'ja-JP') => {
   const languageLabel = language ? String(language).trim() : 'ja-JP';
+  const isJapanese = languageLabel.toLowerCase().startsWith('ja');
+  const isEnglish = languageLabel.toLowerCase().startsWith('en');
+
+  let languageSpecificRules;
+  if (isJapanese) {
+    languageSpecificRules = `Quy tắc riêng cho tiếng Nhật:
+- Cột Cách đọc: Luôn viết bằng Kana (Hiragana/Katakana).
+- Cột Nghĩa tiếng Việt & Âm Hán tự: Nếu từ có chữ Hán (Kanji), PHẢI ghi kèm âm Hán tự (viết hoa trong ngoặc vuông ở cuối), ví dụ: "Quyết tâm [GIÁC NGỘ]", "Thận trọng [THẬN TRỌNG]". Nếu từ thuần Kana thì chỉ ghi nghĩa tiếng Việt thông thường.
+- Cột Ví dụ theo từng mẫu nghĩa: Nếu từ có nhiều nét nghĩa/cách dùng quan trọng (từ đa nghĩa), hãy TÁCH THÀNH CÁC DÒNG THẺ RIÊNG BIỆT cho từng nét nghĩa kèm ví dụ tương ứng để người học ghi nhớ từng ngữ cảnh hiệu quả nhất.
+- Cột TTS ví dụ: Toàn bộ câu ví dụ được phiên âm ra Kana để giọng đọc phát âm chuẩn xác.`;
+  } else if (isEnglish) {
+    languageSpecificRules = `Quy tắc riêng cho tiếng Anh:
+- Cột Cách đọc: Viết bằng phiên âm IPA chuẩn quốc tế (ví dụ: /ˈæp.əl/).
+- Cột TTS ví dụ: Để trống trừ khi câu có từ viết tắt hoặc cách đọc đặc biệt.`;
+  } else {
+    languageSpecificRules = `Quy tắc ngôn ngữ:
+- Cột Cách đọc: Ghi cách phát âm chuẩn hoặc bảng chữ cái ngữ âm tương ứng.
+- Cột TTS ví dụ: Để trống trừ khi cần phiên âm đặc biệt cho công cụ phát âm.`;
+  }
+
   return `Bạn là trợ lý tạo flashcard học từ vựng.
 
 Ngôn ngữ phát âm của học phần: ${languageLabel}.
@@ -89,13 +109,13 @@ không giải thích. Mỗi thẻ đúng một dòng, gồm chính xác sáu c�
 
 Từ vựng | Nghĩa tiếng Việt | Cách đọc | Câu ví dụ | Nghĩa ví dụ | Nội dung TTS ví dụ
 
-Quy tắc:
+Quy tắc chung:
 - Không dùng ký tự | bên trong bất kỳ cột nào.
 - Cung cấp một câu ví dụ ngắn, tự nhiên, đúng ngữ cảnh cho mỗi từ.
-- Với tiếng Nhật: cột Cách đọc là Kana; cột TTS ví dụ là cả câu viết bằng Kana.
-- Với tiếng Anh: cột Cách đọc là IPA; để trống cột TTS ví dụ trừ khi câu có cách đọc đặc biệt.
 - Nếu không có cách đọc hoặc TTS thay thế, giữ cột đó trống nhưng vẫn giữ đủ sáu cột.
 - Không bịa nghĩa hoặc câu ví dụ nếu từ đầu vào không đủ rõ; hãy giữ nguyên từ đó.
+
+${languageSpecificRules}
 
 Danh sách từ cần tạo:
 [DÁN TỪ HOẶC CHỦ ĐỀ CỦA TÔI Ở ĐÂY]`;
