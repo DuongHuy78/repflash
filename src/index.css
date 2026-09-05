@@ -2067,16 +2067,26 @@ kbd {
 }
 
 .review-score {
-  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.review-score__label {
+  white-space: nowrap;
 }
 
 .review-score__shortcut {
-  position: absolute;
-  top: 0.35rem;
-  right: 0.45rem;
-  padding: 0.1rem 0.3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 1.15rem;
+  min-height: 1.15rem;
+  padding: 0.1rem var(--space-1);
   border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 4px;
+  border-radius: var(--space-1);
   color: rgba(255, 255, 255, 0.92);
   font-size: 0.7rem;
   font-weight: 700;
