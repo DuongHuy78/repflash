@@ -634,6 +634,11 @@ h1 {
   background: rgba(9, 18, 37, 0.38);
 }
 
+.flashcard-example--active {
+  border-color: rgba(184, 181, 255, 0.38);
+  background: rgba(143, 139, 255, 0.12);
+}
+
 .flashcard-example__source {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Brain,
   Check,
@@ -14,11 +14,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { speakText } from '../utils/speechUtils';
-import {
-  getCardSpeechText,
-  getExampleSpeechText,
-} from '../utils/cardContentUtils';
+import { getSpeakableExamples } from '../utils/cardContentUtils';
 
 const ReviewCard = ({
   card,
@@ -32,14 +28,17 @@ const ReviewCard = ({
   onEdit,
   onDelete,
   reviewMode = 'main', // 'main' | 'retry' | 'new'
-  currentDeckLanguage = 'ja-JP',
+  activeExampleIndex = null,
+  onSpeakCard,
+  onSpeakExample,
 }) => {
   const [editFront, setEditFront] = useState(card.front);
   const [editBack, setEditBack] = useState(card.back);
+  const activeExampleRef = useRef(null);
   const pronunciation = card.pronunciation?.trim() || '';
-  const examples = Array.isArray(card.examples)
-    ? card.examples.filter((example) => example?.text?.trim())
-    : [];
+  const examples = getSpeakableExamples(card);
+  const backSpeakLabel = examples.length > 0 ? 'Đọc ví dụ' : 'Đọc từ vựng';
+  const backSpeakTitle = `${backSpeakLabel} (Phím V)`;
 
   const handleFlip = () => {
     if (!isEditing) {
@@ -57,14 +56,22 @@ const ReviewCard = ({
     handleFlip();
   };
 
+  useEffect(() => {
+    if (activeExampleIndex == null) return;
+    const node = activeExampleRef.current;
+    if (!node) return;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    node.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+  }, [activeExampleIndex]);
+
   const handleSpeak = (e) => {
     e.stopPropagation();
-    speakText(getCardSpeechText(card, currentDeckLanguage), currentDeckLanguage);
+    onSpeakCard?.();
   };
 
-  const handleSpeakExample = (e, example) => {
+  const handleSpeakExample = (e, example, index) => {
     e.stopPropagation();
-    speakText(getExampleSpeechText(example), currentDeckLanguage);
+    onSpeakExample?.(example, index);
   };
 
   const handleTogglePronunciation = (e) => {
@@ -236,8 +243,8 @@ const ReviewCard = ({
                 type="button"
                 className="flashcard-tool-btn flashcard-tool-btn--speak"
                 onClick={handleSpeak}
-                title="Đọc từ vựng (Phím V)"
-                aria-label="Đọc từ vựng"
+                title={backSpeakTitle}
+                aria-label={backSpeakLabel}
                 tabIndex={isFlipped && !isEditing ? 0 : -1}
                 disabled={!isFlipped || isEditing}
               >
@@ -263,13 +270,18 @@ const ReviewCard = ({
                   <h3>Ví dụ</h3>
                   <div className="flashcard-example-list">
                     {examples.map((example, index) => (
-                      <article key={`${example.text}-${index}`} className="flashcard-example">
+                      <article
+                        key={`${example.text}-${index}`}
+                        className={`flashcard-example${index === activeExampleIndex ? ' flashcard-example--active' : ''}`}
+                        ref={index === activeExampleIndex ? activeExampleRef : undefined}
+                        aria-current={index === activeExampleIndex ? 'true' : undefined}
+                      >
                         <div className="flashcard-example__source">
                           <p>{example.text}</p>
                           <button
                             type="button"
                             className="flashcard-example__speak"
-                            onClick={(event) => handleSpeakExample(event, example)}
+                            onClick={(event) => handleSpeakExample(event, example, index)}
                             aria-label={`Đọc ví dụ ${index + 1}`}
                             title={`Đọc ví dụ ${index + 1}`}
                             tabIndex={isFlipped && !isEditing ? 0 : -1}

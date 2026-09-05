@@ -11,7 +11,7 @@ import AddCardsPanel from './components/AddCardsPanel';
 import AuthPage from './components/AuthPage'; // <--- Import trang Đăng nhập
 import QUOTES from './quotes.json';
 import { speakText, getAvailableLanguages } from './utils/speechUtils';
-import { getCardSpeechText } from './utils/cardContentUtils';
+import { getExampleSpeechText, getNextStudySpeech } from './utils/cardContentUtils';
 import useStudySession from './hooks/useStudySession';
 import HelpModal from './components/HelpModal';
 import ProfileModal from './components/ProfileModal';
@@ -354,6 +354,8 @@ function App() {
     isEditing: false,
     isPronunciationVisible: false,
   });
+  const [exampleSpeechIndex, setExampleSpeechIndex] = useState(0);
+  const [activeExampleIndex, setActiveExampleIndex] = useState(null);
 
   const currentCard = cards[0];
   const currentCardId = currentCard?._id;
@@ -398,6 +400,42 @@ function App() {
   const isPronunciationVisible = isCurrentCardUiState
     ? cardUiState.isPronunciationVisible
     : defaultPronunciationVisible;
+
+  useEffect(() => {
+    setExampleSpeechIndex(0);
+    setActiveExampleIndex(null);
+  }, [currentCardId, isCardFlipped]);
+
+  const speakForCurrentFace = useCallback(() => {
+    if (!currentCard) return;
+
+    const payload = getNextStudySpeech({
+      card: currentCard,
+      language: currentDeckLanguage,
+      isFlipped: isCardFlipped,
+      exampleIndex: exampleSpeechIndex,
+    });
+
+    speakText(payload.text, currentDeckLanguage, {
+      onEnd: () => {
+        if (payload.spokenIndex == null) return;
+        setActiveExampleIndex((current) => (
+          current === payload.spokenIndex ? null : current
+        ));
+      },
+    });
+    setExampleSpeechIndex(payload.nextIndex);
+    setActiveExampleIndex(payload.spokenIndex);
+  }, [currentCard, currentDeckLanguage, exampleSpeechIndex, isCardFlipped]);
+
+  const speakExampleAt = useCallback((example, index) => {
+    speakText(getExampleSpeechText(example), currentDeckLanguage, {
+      onEnd: () => {
+        setActiveExampleIndex((current) => (current === index ? null : current));
+      },
+    });
+    setActiveExampleIndex(index);
+  }, [currentDeckLanguage]);
 
   const setIsCardFlipped = useCallback((nextValue) => {
     setCardUiState((state) => {
@@ -715,9 +753,7 @@ function App() {
 
       if (key === 'v' && currentCard && !isCardEditing) {
         event.preventDefault();
-        const currentDeckObj = decks.find(d => d._id === currentDeck);
-        const deckLang = currentDeckObj?.language || 'ja-JP';
-        speakText(getCardSpeechText(currentCard, deckLang), deckLang);
+        speakForCurrentFace();
         return;
       }
 
@@ -750,8 +786,6 @@ function App() {
   }, [
     activeTab,
     currentCard,
-    currentDeck,
-    decks,
     handleRandomQuote,
     handleReview,
     isCardEditing,
@@ -761,6 +795,7 @@ function App() {
     setIsCardEditing,
     setIsCardFlipped,
     reviewMode,
+    speakForCurrentFace,
     toggleCurrentCardPronunciation,
   ]);
 
@@ -965,7 +1000,9 @@ function App() {
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     reviewMode={reviewMode}
-                    currentDeckLanguage={decks.find(d => d._id === currentDeck)?.language || 'ja-JP'}
+                    activeExampleIndex={activeExampleIndex}
+                    onSpeakCard={speakForCurrentFace}
+                    onSpeakExample={speakExampleAt}
                   />
 
                   {/* Quote Section */}

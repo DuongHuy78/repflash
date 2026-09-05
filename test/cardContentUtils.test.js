@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   buildAiPrompt,
   getCardValidationErrors,
+  getNextStudySpeech,
+  getSpeakableExamples,
   hasCardValidationErrors,
   parseBulkImportText,
 } from '../src/utils/cardContentUtils.js';
@@ -185,6 +187,120 @@ test('buildAiPrompt: tiếng Nhật có quy tắc âm Hán tự và tách thẻ 
   assert.match(jaPrompt, /Âm Hán tự/i);
   assert.match(jaPrompt, /GIÁC NGỘ/);
   assert.match(jaPrompt, /TÁCH THÀNH CÁC DÒNG THẺ RIÊNG BIỆT/);
+});
+
+const speechCard = {
+  front: 'cat',
+  speechText: 'cat',
+  examples: [
+    { text: 'I have a cat.', translation: 'Tôi có mèo.', ttsText: '' },
+    { text: 'The cat sleeps.', translation: '', ttsText: 'the cat sleeps' },
+    { text: 'Cats are cute.', translation: '', ttsText: '' },
+    { text: '   ', translation: 'bỏ qua', ttsText: 'ignored' },
+  ],
+};
+
+test('getSpeakableExamples: chỉ giữ câu có text và bỏ examples không phải mảng', () => {
+  assert.equal(getSpeakableExamples(speechCard).length, 3);
+  assert.deepEqual(getSpeakableExamples({ front: 'cat' }), []);
+  assert.deepEqual(getSpeakableExamples(null), []);
+});
+
+test('getNextStudySpeech: mặt trước luôn đọc từ', () => {
+  const result = getNextStudySpeech({
+    card: speechCard,
+    language: 'en-US',
+    isFlipped: false,
+    exampleIndex: 2,
+  });
+
+  assert.equal(result.text, 'cat');
+  assert.equal(result.nextIndex, 0);
+  assert.equal(result.source, 'word');
+  assert.equal(result.spokenIndex, null);
+});
+
+test('getNextStudySpeech: mặt sau không ví dụ thì đọc từ', () => {
+  const result = getNextStudySpeech({
+    card: { front: 'cat', speechText: 'cat', examples: [] },
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: 0,
+  });
+
+  assert.equal(result.source, 'word');
+  assert.equal(result.text, 'cat');
+  assert.equal(result.nextIndex, 0);
+  assert.equal(result.spokenIndex, null);
+});
+
+test('getNextStudySpeech: một ví dụ đọc lại chính câu đó', () => {
+  const result = getNextStudySpeech({
+    card: {
+      front: 'cat',
+      speechText: 'cat',
+      examples: [{ text: 'I have a cat.', ttsText: '' }],
+    },
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: 0,
+  });
+
+  assert.equal(result.source, 'example');
+  assert.equal(result.text, 'I have a cat.');
+  assert.equal(result.spokenIndex, 0);
+  assert.equal(result.nextIndex, 0);
+});
+
+test('getNextStudySpeech: nhiều ví dụ quay vòng và ưu tiên ttsText', () => {
+  const first = getNextStudySpeech({
+    card: speechCard,
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: 0,
+  });
+  const second = getNextStudySpeech({
+    card: speechCard,
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: first.nextIndex,
+  });
+  const third = getNextStudySpeech({
+    card: speechCard,
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: second.nextIndex,
+  });
+
+  assert.equal(first.text, 'I have a cat.');
+  assert.equal(first.spokenIndex, 0);
+  assert.equal(first.nextIndex, 1);
+  assert.equal(second.text, 'the cat sleeps');
+  assert.equal(second.spokenIndex, 1);
+  assert.equal(second.nextIndex, 2);
+  assert.equal(third.text, 'Cats are cute.');
+  assert.equal(third.spokenIndex, 2);
+  assert.equal(third.nextIndex, 0);
+});
+
+test('getNextStudySpeech: index lệch vẫn ra vị trí hợp lệ', () => {
+  const fromNegative = getNextStudySpeech({
+    card: speechCard,
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: -1,
+  });
+  const fromOverflow = getNextStudySpeech({
+    card: speechCard,
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: 99,
+  });
+
+  assert.equal(fromNegative.spokenIndex, 2);
+  assert.equal(fromNegative.nextIndex, 0);
+  assert.equal(fromOverflow.spokenIndex, 0);
+  assert.equal(Number.isNaN(fromOverflow.nextIndex), false);
 });
 
 

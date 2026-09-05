@@ -58,6 +58,41 @@ export const getExampleSpeechText = (example) => (
   example?.ttsText?.trim() || example?.text?.trim() || ''
 );
 
+export const getSpeakableExamples = (card) => (
+  Array.isArray(card?.examples)
+    ? card.examples.filter((example) => example?.text?.trim())
+    : []
+);
+
+const getWordStudySpeech = (card, language) => ({
+  text: getCardSpeechText(card, language),
+  nextIndex: 0,
+  source: 'word',
+  spokenIndex: null,
+});
+
+export const getNextStudySpeech = ({
+  card,
+  language = '',
+  isFlipped = false,
+  exampleIndex = 0,
+} = {}) => {
+  if (!isFlipped) return getWordStudySpeech(card, language);
+
+  const examples = getSpeakableExamples(card);
+  const exampleCount = examples.length;
+  if (exampleCount === 0) return getWordStudySpeech(card, language);
+
+  const currentIndex = (((Number(exampleIndex) || 0) % exampleCount) + exampleCount) % exampleCount;
+
+  return {
+    text: getExampleSpeechText(examples[currentIndex]),
+    nextIndex: (currentIndex + 1) % exampleCount,
+    source: 'example',
+    spokenIndex: currentIndex,
+  };
+};
+
 export const getCardValidationErrors = (card = {}) => {
   const normalizedCard = compactCardContent(card);
 
