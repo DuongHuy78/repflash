@@ -182,11 +182,28 @@ test('buildAiPrompt: tạo prompt chuẩn kèm ngôn ngữ học phần', () => 
   assert.match(enPrompt, /IPA/);
 });
 
-test('buildAiPrompt: tiếng Nhật có quy tắc âm Hán tự và tách thẻ theo mẫu nghĩa', () => {
+test('buildAiPrompt: tiếng Nhật có quy tắc âm Hán tự và gộp thẻ đa nghĩa', () => {
   const jaPrompt = buildAiPrompt('ja-JP');
   assert.match(jaPrompt, /Âm Hán tự/i);
   assert.match(jaPrompt, /GIÁC NGỘ/);
-  assert.match(jaPrompt, /TÁCH THÀNH CÁC DÒNG THẺ RIÊNG BIỆT/);
+  assert.match(jaPrompt, /GỘP MỘT THẺ/);
+  assert.match(jaPrompt, / ; /);
+  assert.doesNotMatch(jaPrompt, /TÁCH THÀNH CÁC DÒNG THẺ RIÊNG BIỆT/);
+  assert.match(jaPrompt, /khác cách đọc/i);
+
+  const enPrompt = buildAiPrompt('en-US');
+  assert.match(enPrompt, /GỘP MỘT THẺ/);
+});
+
+test('parseBulkImportText: cột nghĩa gộp nhiều nét trên một dòng vẫn là một thẻ', () => {
+  const text = 'かける | Treo, móc ; Gọi điện ; Đeo (kính) | かける | 壁に絵をかける。 | Treo tranh lên tường. | かべに えを かける。';
+  const result = parseBulkImportText(text, '|');
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.cards.length, 1);
+  assert.equal(result.cards[0].front, 'かける');
+  assert.equal(result.cards[0].back, 'Treo, móc ; Gọi điện ; Đeo (kính)');
+  assert.equal(result.cards[0].examples.length, 1);
+  assert.equal(result.cards[0].examples[0].text, '壁に絵をかける。');
 });
 
 const speechCard = {
