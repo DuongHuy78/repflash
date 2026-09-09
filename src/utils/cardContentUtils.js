@@ -122,6 +122,7 @@ export const buildAiPrompt = (language = 'ja-JP') => {
     languageSpecificRules = `Quy tắc riêng cho tiếng Nhật:
 - Cột Cách đọc: Luôn viết bằng Kana (Hiragana/Katakana).
 - Cột Nghĩa tiếng Việt & Âm Hán tự: Nếu từ có chữ Hán (Kanji), PHẢI ghi kèm âm Hán tự (viết hoa trong ngoặc vuông ở cuối), ví dụ: "Quyết tâm [GIÁC NGỘ]", "Thận trọng [THẬN TRỌNG]". Nếu từ thuần Kana thì chỉ ghi nghĩa tiếng Việt thông thường. Từ đa nghĩa: ghi âm Hán một lần ở cuối cột nghĩa.
+- Âm Hán tự nằm trên dòng nghĩa. Dòng chú ý (nếu có) đứng sau, không đưa âm Hán vào dòng "chú ý:".
 - Chỉ tách thẻ khi khác cách đọc, tức là khác từ (ví dụ 生: なま và せい). Cùng chữ và cùng cách đọc thì luôn GỘP MỘT THẺ.
 - Cột TTS ví dụ: Toàn bộ câu ví dụ được phiên âm ra Kana để giọng đọc phát âm chuẩn xác.`;
   } else if (isEnglish) {
@@ -146,8 +147,10 @@ Từ vựng | Nghĩa tiếng Việt | Cách đọc | Câu ví dụ | Nghĩa ví 
 
 Quy tắc chung:
 - Không dùng ký tự | bên trong bất kỳ cột nào.
-- Mỗi thẻ đúng một dòng. Không xuống dòng trong bất kỳ cột nào.
+- Mỗi thẻ đúng một dòng. Không xuống dòng (Enter) trong bất kỳ cột nào.
 - Từ đa nghĩa cùng cách đọc: GỘP MỘT THẺ. Cột Nghĩa tiếng Việt liệt kê 2–4 nét quan trọng trên cùng một dòng, nghĩa chính trước, ngăn bằng " ; ". Không tách thành nhiều dòng thẻ.
+- Nếu đầu vào có chú thích, giải thích, cách dùng hoặc ghi chú ngữ pháp: GIỮ LẠI trong cột Nghĩa. Không bịa chú thích. Không có thì không thêm dòng chú ý.
+- Khi có chú thích: đặt cuối cột Nghĩa, sau các nét nghĩa (và âm Hán tự nếu có). Dùng đúng hai ký tự \\n (gạch chéo ngược + chữ n, không phải phím Enter) rồi tới "chú ý: " (chữ thường, có dấu, sau hai chấm có một khoảng trắng), rồi nội dung rút gọn trên một dòng. Nhiều ghi chú gộp bằng " ; ". Ví dụ: "Treo, móc ; Gọi điện\\nchú ý: Tha động từ; tân ngữ を".
 - Cung cấp một câu ví dụ ngắn, tự nhiên, đúng nghĩa chính.
 - Nếu không có cách đọc hoặc TTS thay thế, giữ cột đó trống nhưng vẫn giữ đủ sáu cột.
 - Không bịa nghĩa hoặc câu ví dụ nếu từ đầu vào không đủ rõ; hãy giữ nguyên từ đó.
@@ -157,6 +160,10 @@ ${languageSpecificRules}
 Danh sách từ cần tạo:
 [DÁN TỪ HOẶC CHỦ ĐỀ CỦA TÔI Ở ĐÂY]`;
 };
+
+// Import mỗi dòng = một thẻ, nên AI ghi \n (hai ký tự) thay vì Enter.
+// Chỉ cột nghĩa được đổi thành newline thật để giữ dòng "chú ý:".
+const unescapeImportNewlines = (value) => String(value || '').replace(/\\n/g, '\n');
 
 export const parseBulkImportText = (text, separator = '|') => {
   const rawText = typeof text === 'string' ? text : '';
@@ -209,7 +216,7 @@ export const parseBulkImportText = (text, separator = '|') => {
     }
 
     const front = parts[0].trim();
-    const back = parts[1].trim();
+    const back = unescapeImportNewlines(parts[1].trim());
     const pronunciation = parts[2]?.trim() || '';
     const exampleText = parts[3]?.trim() || '';
     const exampleTranslation = parts[4]?.trim() || '';

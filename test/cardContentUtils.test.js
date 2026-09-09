@@ -195,6 +195,18 @@ test('buildAiPrompt: tiếng Nhật có quy tắc âm Hán tự và gộp thẻ 
   assert.match(enPrompt, /GỘP MỘT THẺ/);
 });
 
+test('buildAiPrompt: chú thích dùng \\nchú ý: và không bịa khi không có', () => {
+  const jaPrompt = buildAiPrompt('ja-JP');
+  assert.match(jaPrompt, /\\nchú ý:/);
+  assert.match(jaPrompt, /chú thích/i);
+  assert.match(jaPrompt, /Không bịa chú thích/);
+  assert.match(jaPrompt, /không đưa âm Hán vào dòng "chú ý:"/);
+
+  const enPrompt = buildAiPrompt('en-US');
+  assert.match(enPrompt, /\\nchú ý:/);
+  assert.match(enPrompt, /chú thích/i);
+});
+
 test('parseBulkImportText: cột nghĩa gộp nhiều nét trên một dòng vẫn là một thẻ', () => {
   const text = 'かける | Treo, móc ; Gọi điện ; Đeo (kính) | かける | 壁に絵をかける。 | Treo tranh lên tường. | かべに えを かける。';
   const result = parseBulkImportText(text, '|');
@@ -204,6 +216,28 @@ test('parseBulkImportText: cột nghĩa gộp nhiều nét trên một dòng v�
   assert.equal(result.cards[0].back, 'Treo, móc ; Gọi điện ; Đeo (kính)');
   assert.equal(result.cards[0].examples.length, 1);
   assert.equal(result.cards[0].examples[0].text, '壁に絵をかける。');
+});
+
+test('parseBulkImportText: \\nchú ý: trong cột nghĩa thành newline thật', () => {
+  const text = 'かける | Treo, móc ; Gọi điện ; Đeo (kính)\\nchú ý: Tha động từ; tân ngữ を | かける | 壁に絵をかける。 | Treo tranh lên tường. | かべに えを かける。';
+  const result = parseBulkImportText(text, '|');
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.cards.length, 1);
+  assert.equal(
+    result.cards[0].back,
+    'Treo, móc ; Gọi điện ; Đeo (kính)\nchú ý: Tha động từ; tân ngữ を'
+  );
+  assert.equal(result.cards[0].examples[0].text, '壁に絵をかける。');
+});
+
+test('parseBulkImportText: không có chú thích thì không thêm dòng chú ý; \\n ở cột khác giữ nguyên', () => {
+  const text = 'apple | Quả táo. | /ˈæp.əl/ | She eats an apple\\nevery day. | Cô ấy ăn. |';
+  const result = parseBulkImportText(text, '|');
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.cards.length, 1);
+  assert.equal(result.cards[0].back, 'Quả táo.');
+  assert.doesNotMatch(result.cards[0].back, /chú ý:/);
+  assert.equal(result.cards[0].examples[0].text, 'She eats an apple\\nevery day.');
 });
 
 const speechCard = {
