@@ -323,7 +323,7 @@ const AddCardsPanel = ({
           aria-labelledby={bulkTabId}
         >
           <p className="add-cards-panel__description">
-            Mỗi thẻ nằm trên một dòng. Hỗ trợ định dạng 2 cột (<code>Từ | Nghĩa</code>) hoặc 6 cột đầy đủ cách đọc và câu ví dụ.
+            Mỗi thẻ nằm trên một dòng. Hỗ trợ 2 cột (<code>Từ | Nghĩa</code>) hoặc 6/9/12/15 cột (cách đọc + 1–4 ví dụ; mỗi ví dụ đủ 3 cột: câu, nghĩa, TTS). Cách đọc và TTS được để trống.
           </p>
 
           <section className="add-cards-panel__ai-box" aria-label="Trợ lý Prompt AI">
@@ -416,7 +416,7 @@ const AddCardsPanel = ({
                 value={importText}
                 onChange={(event) => handleImportTextChange(event.target.value)}
                 rows="8"
-                placeholder={`Ví dụ 6 cột:\n覚悟 | Quyết tâm | かくご | 覚悟を決めて挑戦する。 | Tôi quyết tâm thử thách bản thân. | かくごをきめてちょうせんする。\napple | Quả táo. | /ˈæp.əl/ | She eats an apple every day. | Cô ấy ăn một quả táo mỗi ngày. |\n\nHoặc ví dụ 2 cột:\nHello | Xin chào\nCat | Con mèo`}
+                placeholder={`Ví dụ 6 cột:\n覚悟 | Quyết tâm | かくご | 覚悟を決めて挑戦する。 | Tôi quyết tâm thử thách bản thân. | かくごをきめてちょうせんする。\napple | Quả táo. | /ˈæp.əl/ | She eats an apple every day. | Cô ấy ăn một quả táo mỗi ngày. |\n\nVí dụ 9 cột (2 ví dụ):\nかける | Treo, móc ; Gọi điện | かける | 壁に絵をかける。 | Treo tranh lên tường. | かべに えを かける。 | 友達に電話をかける。 | Gọi điện cho bạn. | ともだちに でんわを かける。\n\nHoặc ví dụ 2 cột:\nHello | Xin chào\nCat | Con mèo`}
               />
             </div>
 

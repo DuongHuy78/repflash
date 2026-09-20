@@ -38,7 +38,9 @@ const ReviewCard = ({
   const pronunciation = card.pronunciation?.trim() || '';
   const examples = getSpeakableExamples(card);
   const backSpeakLabel = examples.length > 0 ? 'Đọc ví dụ' : 'Đọc từ vựng';
-  const backSpeakTitle = `${backSpeakLabel} (Phím V)`;
+  const backSpeakTitle = examples.length > 0
+    ? 'Đọc ví dụ đang chọn (V phát lại, B câu tiếp)'
+    : 'Đọc từ vựng (Phím V)';
 
   const handleFlip = () => {
     if (!isEditing) {

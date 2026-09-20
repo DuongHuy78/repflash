@@ -66,16 +66,21 @@ export const getSpeakableExamples = (card) => (
 
 const getWordStudySpeech = (card, language) => ({
   text: getCardSpeechText(card, language),
-  nextIndex: 0,
+  selectedIndex: null,
   source: 'word',
   spokenIndex: null,
 });
 
-export const getNextStudySpeech = ({
+const hasSelectedExampleIndex = (exampleIndex) => (
+  exampleIndex != null && Number.isFinite(Number(exampleIndex))
+);
+
+export const getStudySpeech = ({
   card,
   language = '',
   isFlipped = false,
-  exampleIndex = 0,
+  exampleIndex = null,
+  advance = false,
 } = {}) => {
   if (!isFlipped) return getWordStudySpeech(card, language);
 
@@ -83,13 +88,17 @@ export const getNextStudySpeech = ({
   const exampleCount = examples.length;
   if (exampleCount === 0) return getWordStudySpeech(card, language);
 
-  const currentIndex = (((Number(exampleIndex) || 0) % exampleCount) + exampleCount) % exampleCount;
+  let spokenIndex = 0;
+  if (hasSelectedExampleIndex(exampleIndex)) {
+    const currentIndex = ((Number(exampleIndex) % exampleCount) + exampleCount) % exampleCount;
+    spokenIndex = advance ? (currentIndex + 1) % exampleCount : currentIndex;
+  }
 
   return {
-    text: getExampleSpeechText(examples[currentIndex]),
-    nextIndex: (currentIndex + 1) % exampleCount,
+    text: getExampleSpeechText(examples[spokenIndex]),
+    selectedIndex: spokenIndex,
     source: 'example',
-    spokenIndex: currentIndex,
+    spokenIndex,
   };
 };
 
@@ -124,7 +133,7 @@ export const buildAiPrompt = (language = 'ja-JP') => {
 - Cột Nghĩa tiếng Việt & Âm Hán tự: Nếu từ có chữ Hán (Kanji), PHẢI ghi kèm âm Hán tự (viết hoa trong ngoặc vuông ở cuối), ví dụ: "Quyết tâm [GIÁC NGỘ]", "Thận trọng [THẬN TRỌNG]". Nếu từ thuần Kana thì chỉ ghi nghĩa tiếng Việt thông thường. Từ đa nghĩa: ghi âm Hán một lần ở cuối cột nghĩa.
 - Âm Hán tự nằm trên dòng nghĩa. Dòng chú ý (nếu có) đứng sau, không đưa âm Hán vào dòng "chú ý:".
 - Chỉ tách thẻ khi khác cách đọc, tức là khác từ (ví dụ 生: なま và せい). Cùng chữ và cùng cách đọc thì luôn GỘP MỘT THẺ.
-- Cột TTS ví dụ: Toàn bộ câu ví dụ được phiên âm ra Kana để giọng đọc phát âm chuẩn xác.`;
+- Mỗi cột TTS ví dụ: Toàn bộ câu ví dụ tương ứng được phiên âm ra Kana để giọng đọc phát âm chuẩn xác.`;
   } else if (isEnglish) {
     languageSpecificRules = `Quy tắc riêng cho tiếng Anh:
 - Cột Cách đọc: Viết bằng phiên âm IPA chuẩn quốc tế (ví dụ: /ˈæp.əl/).
@@ -141,9 +150,12 @@ Ngôn ngữ phát âm của học phần: ${languageLabel}.
 
 Hãy chuyển danh sách từ bên dưới thành các thẻ flashcard.
 Chỉ trả về văn bản thuần, không Markdown, không tiêu đề, không đánh số,
-không giải thích. Mỗi thẻ đúng một dòng, gồm chính xác sáu cột ngăn bởi: |
+không giải thích. Mỗi thẻ đúng một dòng, ngăn bởi: |
 
+Mẫu 6 cột (1 ví dụ):
 Từ vựng | Nghĩa tiếng Việt | Cách đọc | Câu ví dụ | Nghĩa ví dụ | Nội dung TTS ví dụ
+
+Mỗi ví dụ thêm: lặp đủ 3 cột nữa (Câu ví dụ | Nghĩa ví dụ | Nội dung TTS ví dụ). Tối đa 4 ví dụ, tức 15 cột (6/9/12/15).
 
 Quy tắc chung:
 - Không dùng ký tự | bên trong bất kỳ cột nào.
@@ -151,8 +163,9 @@ Quy tắc chung:
 - Từ đa nghĩa cùng cách đọc: GỘP MỘT THẺ. Cột Nghĩa tiếng Việt liệt kê 2–4 nét quan trọng trên cùng một dòng, nghĩa chính trước, ngăn bằng " ; ". Không tách thành nhiều dòng thẻ.
 - Nếu đầu vào có chú thích, giải thích, cách dùng hoặc ghi chú ngữ pháp: GIỮ LẠI trong cột Nghĩa. Không bịa chú thích. Không có thì không thêm dòng chú ý.
 - Khi có chú thích: đặt cuối cột Nghĩa, sau các nét nghĩa (và âm Hán tự nếu có). Dùng đúng hai ký tự \\n (gạch chéo ngược + chữ n, không phải phím Enter) rồi tới "chú ý: " (chữ thường, có dấu, sau hai chấm có một khoảng trắng), rồi nội dung rút gọn trên một dòng. Nhiều ghi chú gộp bằng " ; ". Ví dụ: "Treo, móc ; Gọi điện\\nchú ý: Tha động từ; tân ngữ を".
-- Cung cấp một câu ví dụ ngắn, tự nhiên, đúng nghĩa chính.
-- Nếu không có cách đọc hoặc TTS thay thế, giữ cột đó trống nhưng vẫn giữ đủ sáu cột.
+- 1 nét nghĩa: đúng 6 cột, một câu ví dụ ngắn, tự nhiên, đúng nghĩa chính.
+- 2–4 nét nghĩa: thêm đúng một bộ 3 cột cho mỗi nét, tối đa 4 ví dụ, thứ tự khớp các nét trên cột Nghĩa. Không bịa ví dụ cho nét không chắc.
+- Nếu không có cách đọc hoặc TTS thay thế, giữ cột đó trống nhưng vẫn giữ đủ số cột (6/9/12/15). Không xóa cột.
 - Không bịa nghĩa hoặc câu ví dụ nếu từ đầu vào không đủ rõ; hãy giữ nguyên từ đó.
 
 ${languageSpecificRules}
@@ -164,6 +177,41 @@ Danh sách từ cần tạo:
 // Import mỗi dòng = một thẻ, nên AI ghi \n (hai ký tự) thay vì Enter.
 // Chỉ cột nghĩa được đổi thành newline thật để giữ dòng "chú ý:".
 const unescapeImportNewlines = (value) => String(value || '').replace(/\\n/g, '\n');
+
+export const IMPORT_MAX_EXAMPLES = 4;
+export const IMPORT_MAX_COLUMNS = 3 + IMPORT_MAX_EXAMPLES * 3;
+
+const INVALID_IMPORT_COLUMN_COUNT_HINT =
+  'Hợp lệ: 2 cột (từ | nghĩa) hoặc 6/9/12/15 cột (mỗi ví dụ đủ 3 cột: câu, nghĩa, TTS).';
+
+const isAllowedImportColumnCount = (columnCount) => (
+  columnCount === 2
+  || (
+    columnCount >= 6
+    && columnCount <= IMPORT_MAX_COLUMNS
+    && (columnCount - 3) % 3 === 0
+  )
+);
+
+const examplesFromParts = (parts) => {
+  const examples = [];
+  const exampleCount = (parts.length - 3) / 3;
+
+  for (let index = 0; index < exampleCount; index += 1) {
+    const text = parts[3 + index * 3].trim();
+    const translation = parts[4 + index * 3].trim();
+    const ttsText = parts[5 + index * 3].trim();
+    if (!text && !translation && !ttsText) continue;
+
+    examples.push({
+      text,
+      translation,
+      ttsText,
+    });
+  }
+
+  return examples;
+};
 
 export const parseBulkImportText = (text, separator = '|') => {
   const rawText = typeof text === 'string' ? text : '';
@@ -208,44 +256,23 @@ export const parseBulkImportText = (text, separator = '|') => {
   for (const { rawLine, lineNumber } of parsedEntries) {
     const parts = rawLine.split(effectiveSeparator);
 
-    if (parts.length < 2 || parts.length > 6) {
+    if (!isAllowedImportColumnCount(parts.length)) {
       errors.push(
-        `Dòng ${lineNumber}: Số cột không hợp lệ (${parts.length} cột, yêu cầu từ 2 đến 6 cột).`
+        `Dòng ${lineNumber}: Số cột không hợp lệ (${parts.length} cột). ${INVALID_IMPORT_COLUMN_COUNT_HINT}`
       );
       continue;
     }
 
     const front = parts[0].trim();
     const back = unescapeImportNewlines(parts[1].trim());
-    const pronunciation = parts[2]?.trim() || '';
-    const exampleText = parts[3]?.trim() || '';
-    const exampleTranslation = parts[4]?.trim() || '';
-    const exampleTts = parts[5]?.trim() || '';
+    const pronunciation = parts.length === 2 ? '' : parts[2].trim();
+    const examples = parts.length === 2 ? [] : examplesFromParts(parts);
 
     if (!front) {
       errors.push(`Dòng ${lineNumber}: Mặt trước của thẻ không được để trống.`);
     }
     if (!back) {
       errors.push(`Dòng ${lineNumber}: Mặt sau của thẻ không được để trống.`);
-    }
-
-    let examples = [];
-    if (exampleText) {
-      examples = [
-        {
-          text: exampleText,
-          translation: exampleTranslation,
-          ttsText: exampleTts,
-        },
-      ];
-    } else if (exampleTranslation || exampleTts) {
-      examples = [
-        {
-          text: '',
-          translation: exampleTranslation,
-          ttsText: exampleTts,
-        },
-      ];
     }
 
     cards.push(

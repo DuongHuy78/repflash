@@ -11,7 +11,7 @@ import AddCardsPanel from './components/AddCardsPanel';
 import AuthPage from './components/AuthPage'; // <--- Import trang Đăng nhập
 import QUOTES from './quotes.json';
 import { speakText, getAvailableLanguages } from './utils/speechUtils';
-import { getExampleSpeechText, getNextStudySpeech } from './utils/cardContentUtils';
+import { getExampleSpeechText, getSpeakableExamples, getStudySpeech } from './utils/cardContentUtils';
 import useStudySession from './hooks/useStudySession';
 import HelpModal from './components/HelpModal';
 import ProfileModal from './components/ProfileModal';
@@ -354,7 +354,7 @@ function App() {
     isEditing: false,
     isPronunciationVisible: false,
   });
-  const [exampleSpeechIndex, setExampleSpeechIndex] = useState(0);
+  const [exampleSpeechIndex, setExampleSpeechIndex] = useState(null);
   const [activeExampleIndex, setActiveExampleIndex] = useState(null);
 
   const currentCard = cards[0];
@@ -402,18 +402,19 @@ function App() {
     : defaultPronunciationVisible;
 
   useEffect(() => {
-    setExampleSpeechIndex(0);
+    setExampleSpeechIndex(null);
     setActiveExampleIndex(null);
   }, [currentCardId, isCardFlipped]);
 
-  const speakForCurrentFace = useCallback(() => {
+  const speakForCurrentFace = useCallback((advance = false) => {
     if (!currentCard) return;
 
-    const payload = getNextStudySpeech({
+    const payload = getStudySpeech({
       card: currentCard,
       language: currentDeckLanguage,
       isFlipped: isCardFlipped,
       exampleIndex: exampleSpeechIndex,
+      advance: advance === true,
     });
 
     speakText(payload.text, currentDeckLanguage, {
@@ -424,7 +425,7 @@ function App() {
         ));
       },
     });
-    setExampleSpeechIndex(payload.nextIndex);
+    setExampleSpeechIndex(payload.selectedIndex);
     setActiveExampleIndex(payload.spokenIndex);
   }, [currentCard, currentDeckLanguage, exampleSpeechIndex, isCardFlipped]);
 
@@ -434,6 +435,7 @@ function App() {
         setActiveExampleIndex((current) => (current === index ? null : current));
       },
     });
+    setExampleSpeechIndex(index);
     setActiveExampleIndex(index);
   }, [currentDeckLanguage]);
 
@@ -753,7 +755,19 @@ function App() {
 
       if (key === 'v' && currentCard && !isCardEditing) {
         event.preventDefault();
-        speakForCurrentFace();
+        speakForCurrentFace(false);
+        return;
+      }
+
+      if (
+        key === 'b'
+        && currentCard
+        && !isCardEditing
+        && isCardFlipped
+        && getSpeakableExamples(currentCard).length > 0
+      ) {
+        event.preventDefault();
+        speakForCurrentFace(true);
         return;
       }
 
@@ -1001,7 +1015,7 @@ function App() {
                     onDelete={handleDelete}
                     reviewMode={reviewMode}
                     activeExampleIndex={activeExampleIndex}
-                    onSpeakCard={speakForCurrentFace}
+                    onSpeakCard={() => speakForCurrentFace(false)}
                     onSpeakExample={speakExampleAt}
                   />
 

@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  IMPORT_MAX_COLUMNS,
   buildAiPrompt,
   getCardValidationErrors,
-  getNextStudySpeech,
   getSpeakableExamples,
+  getStudySpeech,
   hasCardValidationErrors,
   parseBulkImportText,
 } from '../src/utils/cardContentUtils.js';
@@ -121,7 +122,7 @@ test('parseBulkImportText: bỏ qua các dòng trống và dòng khoảng trắn
   assert.equal(result.cards[1].front, 'World');
 });
 
-test('parseBulkImportText: báo lỗi chính xác số dòng khi thiếu cột hoặc quá 6 cột', () => {
+test('parseBulkImportText: báo lỗi chính xác số dòng khi số cột không thuộc 2/6/9/12/15', () => {
   const text = [
     'Dòng 1 hợp lệ | Nghĩa 1',
     'Dòng 2 chỉ có một cột duy nhất',
@@ -134,6 +135,7 @@ test('parseBulkImportText: báo lỗi chính xác số dòng khi thiếu cột h
   assert.equal(result.errors.length, 2);
   assert.match(result.errors[0], /Dòng 2:.*Số cột không hợp lệ \(1 cột/i);
   assert.match(result.errors[1], /Dòng 4:.*Số cột không hợp lệ \(7 cột/i);
+  assert.match(result.errors[1], /6\/9\/12\/15/);
 });
 
 test('parseBulkImportText: báo lỗi khi mặt trước hoặc mặt sau rỗng', () => {
@@ -171,15 +173,90 @@ test('parseBulkImportText: chặn import khi vượt quá 500 thẻ', () => {
   assert.match(result.errors[0], /500/);
 });
 
+test('parseBulkImportText: 3/4/5/8/10 cột đều lỗi', () => {
+  const cases = [
+    ['Từ | Nghĩa | よみ', 3],
+    ['Từ | Nghĩa | よみ | câu', 4],
+    ['Từ | Nghĩa | よみ | câu | nghĩa câu', 5],
+    ['Từ | Nghĩa | よみ | c1 | n1 | t1 | c2 | n2', 8],
+    ['Từ | Nghĩa | よみ | c1 | n1 | t1 | c2 | n2 | t2 | c3', 10],
+  ];
+
+  for (const [text, columnCount] of cases) {
+    const result = parseBulkImportText(text, '|');
+    assert.equal(result.cards.length, 0, `${columnCount} cột không được nhận`);
+    assert.equal(result.errors.length, 1);
+    assert.match(result.errors[0], new RegExp(`Số cột không hợp lệ \\(${columnCount} cột\\)`));
+  }
+});
+
+test('parseBulkImportText: 9 cột tạo 2 ví dụ', () => {
+  const text = 'かける | Treo, móc ; Gọi điện | かける | 壁に絵をかける。 | Treo tranh lên tường. | かべに えを かける。 | 友達に電話をかける。 | Gọi điện cho bạn. | ともだちに でんわを かける。';
+  const result = parseBulkImportText(text, '|');
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.cards.length, 1);
+  assert.equal(result.cards[0].examples.length, 2);
+  assert.equal(result.cards[0].examples[0].text, '壁に絵をかける。');
+  assert.deepEqual(result.cards[0].examples[1], {
+    text: '友達に電話をかける。',
+    translation: 'Gọi điện cho bạn.',
+    ttsText: 'ともだちに でんわを かける。',
+  });
+});
+
+test('parseBulkImportText: 15 cột tạo 4 ví dụ, 16 cột thì lỗi', () => {
+  const fifteen = 'apple | Quả táo | /ˈæp.əl/ | e1 | t1 | | e2 | t2 | tts2 | e3 | t3 | | e4 | t4 | tts4';
+  const ok = parseBulkImportText(fifteen, '|');
+  assert.equal(ok.errors.length, 0);
+  assert.equal(ok.cards[0].examples.length, 4);
+  assert.equal(ok.cards[0].examples[0].ttsText, '');
+  assert.equal(ok.cards[0].examples[3].text, 'e4');
+
+  const sixteen = `${fifteen} | extra`;
+  const tooMany = parseBulkImportText(sixteen, '|');
+  assert.equal(tooMany.cards.length, 0);
+  assert.match(tooMany.errors[0], new RegExp(`Số cột không hợp lệ \\(${IMPORT_MAX_COLUMNS + 1} cột\\)`));
+});
+
+test('parseBulkImportText: cùng lần dán 2 cột và 9 cột', () => {
+  const text = [
+    'Hello | Xin chào',
+    'かける | Treo, móc ; Gọi điện | かける | 壁に絵をかける。 | Treo tranh lên tường. | かべに えを かける。 | 友達に電話をかける。 | Gọi điện cho bạn. | ともだちに でんわを かける。',
+  ].join('\n');
+  const result = parseBulkImportText(text, '|');
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.cards.length, 2);
+  assert.equal(result.cards[0].examples.length, 0);
+  assert.equal(result.cards[1].examples.length, 2);
+});
+
+test('parseBulkImportText: 9 cột bộ ví dụ đầu trống thì bỏ nhóm đó', () => {
+  const text = 'word | meaning | /ipa/ | | | | ex2 | trans2 | tts2';
+  const result = parseBulkImportText(text, '|');
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.cards.length, 1);
+  assert.deepEqual(result.cards[0].examples, [
+    {
+      text: 'ex2',
+      translation: 'trans2',
+      ttsText: 'tts2',
+    },
+  ]);
+});
+
 test('buildAiPrompt: tạo prompt chuẩn kèm ngôn ngữ học phần', () => {
   const jaPrompt = buildAiPrompt('ja-JP');
   assert.match(jaPrompt, /ja-JP/);
   assert.match(jaPrompt, /Từ vựng \| Nghĩa tiếng Việt \| Cách đọc \| Câu ví dụ \| Nghĩa ví dụ \| Nội dung TTS ví dụ/);
   assert.match(jaPrompt, /Kana/);
+  assert.doesNotMatch(jaPrompt, /chính xác sáu cột/);
+  assert.match(jaPrompt, /6\/9\/12\/15/);
+  assert.match(jaPrompt, /4 ví dụ/);
 
   const enPrompt = buildAiPrompt('en-US');
   assert.match(enPrompt, /en-US/);
   assert.match(enPrompt, /IPA/);
+  assert.match(enPrompt, /Để trống trừ khi câu có từ viết tắt/);
 });
 
 test('buildAiPrompt: tiếng Nhật có quy tắc âm Hán tự và gộp thẻ đa nghĩa', () => {
@@ -257,101 +334,166 @@ test('getSpeakableExamples: chỉ giữ câu có text và bỏ examples không p
   assert.deepEqual(getSpeakableExamples(null), []);
 });
 
-test('getNextStudySpeech: mặt trước luôn đọc từ', () => {
-  const result = getNextStudySpeech({
+test('getStudySpeech: mặt trước luôn đọc từ', () => {
+  const result = getStudySpeech({
     card: speechCard,
     language: 'en-US',
     isFlipped: false,
     exampleIndex: 2,
+    advance: true,
   });
 
   assert.equal(result.text, 'cat');
-  assert.equal(result.nextIndex, 0);
+  assert.equal(result.selectedIndex, null);
   assert.equal(result.source, 'word');
   assert.equal(result.spokenIndex, null);
 });
 
-test('getNextStudySpeech: mặt sau không ví dụ thì đọc từ', () => {
-  const result = getNextStudySpeech({
+test('getStudySpeech: mặt sau không ví dụ thì đọc từ', () => {
+  const result = getStudySpeech({
     card: { front: 'cat', speechText: 'cat', examples: [] },
     language: 'en-US',
     isFlipped: true,
     exampleIndex: 0,
+    advance: true,
   });
 
   assert.equal(result.source, 'word');
   assert.equal(result.text, 'cat');
-  assert.equal(result.nextIndex, 0);
+  assert.equal(result.selectedIndex, null);
   assert.equal(result.spokenIndex, null);
 });
 
-test('getNextStudySpeech: một ví dụ đọc lại chính câu đó', () => {
-  const result = getNextStudySpeech({
-    card: {
-      front: 'cat',
-      speechText: 'cat',
-      examples: [{ text: 'I have a cat.', ttsText: '' }],
-    },
+test('getStudySpeech: chưa chọn thì V và B đều đọc câu 1', () => {
+  const replay = getStudySpeech({
+    card: speechCard,
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: null,
+    advance: false,
+  });
+  const next = getStudySpeech({
+    card: speechCard,
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: null,
+    advance: true,
+  });
+
+  assert.equal(replay.spokenIndex, 0);
+  assert.equal(replay.selectedIndex, 0);
+  assert.equal(replay.text, 'I have a cat.');
+  assert.equal(next.spokenIndex, 0);
+  assert.equal(next.selectedIndex, 0);
+  assert.equal(next.text, 'I have a cat.');
+});
+
+test('getStudySpeech: V phát lại câu đang chọn, B mới sang câu tiếp', () => {
+  const replay = getStudySpeech({
+    card: speechCard,
     language: 'en-US',
     isFlipped: true,
     exampleIndex: 0,
+    advance: false,
   });
-
-  assert.equal(result.source, 'example');
-  assert.equal(result.text, 'I have a cat.');
-  assert.equal(result.spokenIndex, 0);
-  assert.equal(result.nextIndex, 0);
-});
-
-test('getNextStudySpeech: nhiều ví dụ quay vòng và ưu tiên ttsText', () => {
-  const first = getNextStudySpeech({
+  const next = getStudySpeech({
     card: speechCard,
     language: 'en-US',
     isFlipped: true,
     exampleIndex: 0,
-  });
-  const second = getNextStudySpeech({
-    card: speechCard,
-    language: 'en-US',
-    isFlipped: true,
-    exampleIndex: first.nextIndex,
-  });
-  const third = getNextStudySpeech({
-    card: speechCard,
-    language: 'en-US',
-    isFlipped: true,
-    exampleIndex: second.nextIndex,
+    advance: true,
   });
 
-  assert.equal(first.text, 'I have a cat.');
-  assert.equal(first.spokenIndex, 0);
-  assert.equal(first.nextIndex, 1);
-  assert.equal(second.text, 'the cat sleeps');
-  assert.equal(second.spokenIndex, 1);
-  assert.equal(second.nextIndex, 2);
-  assert.equal(third.text, 'Cats are cute.');
-  assert.equal(third.spokenIndex, 2);
-  assert.equal(third.nextIndex, 0);
+  assert.equal(replay.spokenIndex, 0);
+  assert.equal(replay.selectedIndex, 0);
+  assert.equal(replay.text, 'I have a cat.');
+  assert.equal(next.spokenIndex, 1);
+  assert.equal(next.selectedIndex, 1);
+  assert.equal(next.text, 'the cat sleeps');
 });
 
-test('getNextStudySpeech: index lệch vẫn ra vị trí hợp lệ', () => {
-  const fromNegative = getNextStudySpeech({
+test('getStudySpeech: một ví dụ thì V và B cùng câu đó', () => {
+  const card = {
+    front: 'cat',
+    speechText: 'cat',
+    examples: [{ text: 'I have a cat.', ttsText: '' }],
+  };
+  const replay = getStudySpeech({
+    card,
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: 0,
+    advance: false,
+  });
+  const next = getStudySpeech({
+    card,
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: 0,
+    advance: true,
+  });
+
+  assert.equal(replay.source, 'example');
+  assert.equal(replay.spokenIndex, 0);
+  assert.equal(replay.selectedIndex, 0);
+  assert.equal(next.spokenIndex, 0);
+  assert.equal(next.selectedIndex, 0);
+});
+
+test('getStudySpeech: B quay vòng và ưu tiên ttsText', () => {
+  const first = getStudySpeech({
+    card: speechCard,
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: 0,
+    advance: true,
+  });
+  const second = getStudySpeech({
+    card: speechCard,
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: first.selectedIndex,
+    advance: true,
+  });
+  const third = getStudySpeech({
+    card: speechCard,
+    language: 'en-US',
+    isFlipped: true,
+    exampleIndex: second.selectedIndex,
+    advance: true,
+  });
+
+  assert.equal(first.text, 'the cat sleeps');
+  assert.equal(first.spokenIndex, 1);
+  assert.equal(first.selectedIndex, 1);
+  assert.equal(second.text, 'Cats are cute.');
+  assert.equal(second.spokenIndex, 2);
+  assert.equal(second.selectedIndex, 2);
+  assert.equal(third.text, 'I have a cat.');
+  assert.equal(third.spokenIndex, 0);
+  assert.equal(third.selectedIndex, 0);
+});
+
+test('getStudySpeech: index lệch thì modulo rồi phát lại', () => {
+  const fromNegative = getStudySpeech({
     card: speechCard,
     language: 'en-US',
     isFlipped: true,
     exampleIndex: -1,
+    advance: false,
   });
-  const fromOverflow = getNextStudySpeech({
+  const fromOverflow = getStudySpeech({
     card: speechCard,
     language: 'en-US',
     isFlipped: true,
     exampleIndex: 99,
+    advance: false,
   });
 
   assert.equal(fromNegative.spokenIndex, 2);
-  assert.equal(fromNegative.nextIndex, 0);
+  assert.equal(fromNegative.selectedIndex, 2);
   assert.equal(fromOverflow.spokenIndex, 0);
-  assert.equal(Number.isNaN(fromOverflow.nextIndex), false);
+  assert.equal(fromOverflow.selectedIndex, 0);
 });
 
 
