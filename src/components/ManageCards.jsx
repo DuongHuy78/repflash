@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useId, useRef } from 'react';
 import axios from 'axios';
-import { MoreVertical, Pencil, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { MoreVertical, Pencil, RotateCcw, SlidersHorizontal, Trash2 } from 'lucide-react';
 import CardContentFields from './CardContentFields';
 import CardFilterSheet from './CardFilterSheet';
 import useDialogFocus from '../hooks/useDialogFocus';
@@ -161,10 +161,14 @@ export default function ManageCards({ currentDeck, onOpenImport, onFullscreenCha
     setEditError('');
     setEditFieldErrors({});
     try {
+      const canEditNextReview =
+        editForm.status === 'active' || editForm.status === 'learning';
+
       await axios.put(`${API_URL}/${id}`, {
         ...normalizedContent,
-        status: editForm.status,
-        nextReview: editForm.nextReview || undefined
+        ...(canEditNextReview && editForm.nextReview
+          ? { nextReview: editForm.nextReview }
+          : {}),
       });
       closeEdit();
       fetchCards(); // Tải lại danh sách
@@ -195,6 +199,29 @@ export default function ManageCards({ currentDeck, onOpenImport, onFullscreenCha
     if (!editingCardId || isEditSaving) return;
     const deleted = await handleDelete(editingCardId);
     if (deleted) closeEdit();
+  };
+
+  const handleResetFromEdit = async () => {
+    if (!editingCardId || isEditSaving || editForm.status === 'new') return;
+    if (!window.confirm('Học lại từ này từ đầu? Thẻ sẽ vào hàng Từ mới và mất lịch ôn hiện tại.')) {
+      return;
+    }
+
+    setIsEditSaving(true);
+    setEditError('');
+    try {
+      await axios.put(`${API_URL}/${editingCardId}/reset`);
+      closeEdit();
+      fetchCards();
+      alert('Đã chuyển sang Từ mới và nằm trong danh sách chờ.');
+    } catch (error) {
+      console.error('Lỗi khi học lại thẻ:', error);
+      setEditError(
+        error.response?.data?.message || 'Không thể chuyển thẻ về Từ mới.',
+      );
+    } finally {
+      setIsEditSaving(false);
+    }
   };
 
   const handleApplyStatus = (nextStatus) => {
@@ -463,7 +490,7 @@ export default function ManageCards({ currentDeck, onOpenImport, onFullscreenCha
               </button>
               <div>
                 <h3 id="edit-card-title">Chỉnh sửa thẻ</h3>
-                <p>Cập nhật nội dung và trạng thái học của thẻ.</p>
+                <p>Cập nhật nội dung thẻ. Lịch học chỉ đổi khi ôn hoặc học lại từ đầu.</p>
               </div>
               <button
                 type="button"
@@ -496,29 +523,38 @@ export default function ManageCards({ currentDeck, onOpenImport, onFullscreenCha
                 mode="edit"
               />
 
-              <div className="manage-edit-field">
-                <label htmlFor="edit-card-status">Trạng thái</label>
-                <select
-                  id="edit-card-status"
-                  className="form-control"
-                  value={editForm.status}
-                  onChange={e => setEditForm({...editForm, status: e.target.value})}
-                >
-                  {CARD_STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
+              {(editForm.status === 'active' || editForm.status === 'learning') && (
+                <div className="manage-edit-field">
+                  <label htmlFor="edit-card-next-review">Ngày ôn tiếp theo</label>
+                  <input
+                    id="edit-card-next-review"
+                    type="datetime-local"
+                    className="form-control"
+                    value={editForm.nextReview}
+                    onChange={e => setEditForm({...editForm, nextReview: e.target.value})}
+                    disabled={isEditSaving}
+                  />
+                </div>
+              )}
 
-              <div className="manage-edit-field">
-                <label htmlFor="edit-card-next-review">Ngày ôn tiếp theo</label>
-                <input
-                  id="edit-card-next-review"
-                  type="datetime-local"
-                  className="form-control"
-                  value={editForm.nextReview}
-                  onChange={e => setEditForm({...editForm, nextReview: e.target.value})}
-                />
+              <div className="manage-edit-reset-zone">
+                <div>
+                  <strong>Học lại từ đầu</strong>
+                  <p>
+                    {editForm.status === 'new'
+                      ? 'Thẻ này đang ở hàng Từ mới.'
+                      : 'Chuyển về Từ mới và xóa lịch ôn. Thẻ nằm trong danh sách chờ, chưa trừ suất hôm nay.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleResetFromEdit}
+                  disabled={isEditSaving || editForm.status === 'new'}
+                >
+                  <RotateCcw size={16} aria-hidden="true" />
+                  Học lại
+                </button>
               </div>
 
               <div className="manage-edit-danger-zone">

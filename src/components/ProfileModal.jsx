@@ -12,9 +12,13 @@ const ProfileModal = ({ user, onClose, onSave, onChangePassword, onLogout, retur
   const [mode, setMode] = useState('profile');
   const [username, setUsername] = useState(user.username || '');
   const [email, setEmail] = useState(user.email || '');
+  const [newCardsPerDay, setNewCardsPerDay] = useState(
+    String(user.newCardsPerDay ?? 20),
+  );
   const [initialProfile, setInitialProfile] = useState({
     username: user.username || '',
     email: user.email || '',
+    newCardsPerDay: String(user.newCardsPerDay ?? 20),
   });
   const [passwordForm, setPasswordForm] = useState(EMPTY_PASSWORD_FORM);
   const [isPasswordVisible, setIsPasswordVisible] = useState({
@@ -41,6 +45,9 @@ const ProfileModal = ({ user, onClose, onSave, onChangePassword, onLogout, retur
   const emailId = useId();
   const emailHintId = useId();
   const emailErrorId = useId();
+  const newCardsPerDayId = useId();
+  const newCardsPerDayHintId = useId();
+  const newCardsPerDayErrorId = useId();
   const submitStatusId = useId();
   const currentPasswordId = useId();
   const currentPasswordErrorId = useId();
@@ -52,9 +59,11 @@ const ProfileModal = ({ user, onClose, onSave, onChangePassword, onLogout, retur
 
   const normalizedUsername = username.trim();
   const normalizedEmail = email.trim().toLowerCase();
+  const parsedNewCardsPerDay = Number(newCardsPerDay);
   const isDirty =
     normalizedUsername !== initialProfile.username.trim() ||
-    normalizedEmail !== initialProfile.email.trim().toLowerCase();
+    normalizedEmail !== initialProfile.email.trim().toLowerCase() ||
+    String(parsedNewCardsPerDay) !== String(Number(initialProfile.newCardsPerDay));
   const isPasswordFormReady =
     passwordForm.currentPassword &&
     passwordForm.newPassword.length >= 8 &&
@@ -128,6 +137,14 @@ const ProfileModal = ({ user, onClose, onSave, onChangePassword, onLogout, retur
       nextErrors.email = 'Email chưa đúng định dạng, ví dụ: ban@example.com.';
     }
 
+    if (
+      !Number.isInteger(parsedNewCardsPerDay) ||
+      parsedNewCardsPerDay < 1 ||
+      parsedNewCardsPerDay > 100
+    ) {
+      nextErrors.newCardsPerDay = 'Số thẻ mới mỗi ngày phải từ 1 đến 100.';
+    }
+
     setFieldErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -168,15 +185,20 @@ const ProfileModal = ({ user, onClose, onSave, onChangePassword, onLogout, retur
       const updatedUser = await onSave({
         username: normalizedUsername,
         email: normalizedEmail,
+        newCardsPerDay: parsedNewCardsPerDay,
       });
 
       const savedProfile = {
         username: updatedUser?.username || normalizedUsername,
         email: updatedUser?.email || normalizedEmail,
+        newCardsPerDay: String(
+          updatedUser?.newCardsPerDay ?? parsedNewCardsPerDay,
+        ),
       };
 
       setUsername(savedProfile.username);
       setEmail(savedProfile.email);
+      setNewCardsPerDay(savedProfile.newCardsPerDay);
       setInitialProfile(savedProfile);
       setSuccessMessage('Thông tin tài khoản đã được cập nhật.');
     } catch (error) {
@@ -281,7 +303,7 @@ const ProfileModal = ({ user, onClose, onSave, onChangePassword, onLogout, retur
   const headerTitle = isPasswordMode ? 'Đổi mật khẩu' : 'Thông tin tài khoản';
   const headerDescription = isPasswordMode
     ? 'Xác nhận mật khẩu hiện tại trước khi tạo mật khẩu mới.'
-    : 'Cập nhật tên đăng nhập và email của bạn.';
+    : 'Cập nhật tên đăng nhập, email và số thẻ mới mỗi ngày.';
 
   return (
     <div
@@ -392,6 +414,38 @@ const ProfileModal = ({ user, onClose, onSave, onChangePassword, onLogout, retur
                 {fieldErrors.email && (
                   <p id={emailErrorId} className="profile-field__error">
                     {fieldErrors.email}
+                  </p>
+                )}
+              </div>
+
+              <div className="profile-field">
+                <label htmlFor={newCardsPerDayId}>Số thẻ mới mỗi ngày</label>
+                <input
+                  id={newCardsPerDayId}
+                  type="number"
+                  className="form-control"
+                  min="1"
+                  max="100"
+                  step="1"
+                  value={newCardsPerDay}
+                  onChange={(event) => {
+                    setNewCardsPerDay(event.target.value);
+                    clearProfileFieldFeedback('newCardsPerDay');
+                  }}
+                  disabled={isSubmitting}
+                  aria-invalid={Boolean(fieldErrors.newCardsPerDay)}
+                  aria-describedby={
+                    fieldErrors.newCardsPerDay
+                      ? `${newCardsPerDayHintId} ${newCardsPerDayErrorId}`
+                      : newCardsPerDayHintId
+                  }
+                />
+                <p id={newCardsPerDayHintId} className="profile-field__hint">
+                  Trần cho cả tài khoản, không phải từng học phần. Từ 1 đến 100.
+                </p>
+                {fieldErrors.newCardsPerDay && (
+                  <p id={newCardsPerDayErrorId} className="profile-field__error">
+                    {fieldErrors.newCardsPerDay}
                   </p>
                 )}
               </div>

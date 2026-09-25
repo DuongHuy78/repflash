@@ -33,7 +33,7 @@ const getNewQueueEmptyCopy = (meta) => {
   if (meta.remainingQuota === 0 && meta.totalNew > 0) {
     return {
       title: 'Đã học đủ suất từ mới hôm nay',
-      body: `Bạn đã học ${meta.usedToday}/${meta.limit} từ mới. Còn ${meta.totalNew} thẻ chờ ngày mai.`,
+      body: `Bạn đã học ${meta.usedToday}/${meta.limit} từ mới. Còn ${meta.totalNew} thẻ mới.`,
     };
   }
   if (meta.remainingQuota === 0) {

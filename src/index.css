@@ -2338,6 +2338,7 @@ kbd {
   margin-top: 1.5rem;
 }
 
+.manage-edit-reset-zone,
 .manage-edit-danger-zone {
   display: flex;
   align-items: center;
@@ -2345,8 +2346,33 @@ kbd {
   gap: var(--space-4);
   margin-top: var(--space-8);
   padding: var(--space-4);
-  border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: var(--radius-md);
+}
+
+.manage-edit-reset-zone {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.manage-edit-reset-zone strong {
+  color: var(--text-primary);
+}
+
+.manage-edit-reset-zone p {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.manage-edit-reset-zone .btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.manage-edit-danger-zone {
+  border: 1px solid rgba(239, 68, 68, 0.3);
   background: rgba(239, 68, 68, 0.08);
 }
 
@@ -4581,11 +4607,13 @@ kbd {
       max(var(--space-8), env(safe-area-inset-bottom));
   }
 
+  .manage-edit-reset-zone,
   .manage-edit-danger-zone {
     align-items: stretch;
     flex-direction: column;
   }
 
+  .manage-edit-reset-zone .btn,
   .manage-edit-danger-zone .btn {
     width: 100%;
     min-height: 48px;
