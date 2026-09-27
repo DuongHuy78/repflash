@@ -56,6 +56,15 @@ const isTypingTarget = (target) => {
 const resolveStateUpdate = (nextValue, currentValue) =>
   typeof nextValue === 'function' ? nextValue(currentValue) : nextValue;
 
+const getReviewErrorMessage = (error) => {
+  const responseData = error.response?.data;
+
+  if (typeof responseData === 'string') return responseData;
+
+  return responseData?.message
+    || 'Không lưu được đánh giá. Bạn hãy chọn lại để thử lần nữa.';
+};
+
 function App() {
   // --- PHẦN LOGIC ĐĂNG NHẬP ---
   // B1: Đọc Token từ localStorage khi vừa mở app
@@ -356,6 +365,9 @@ function App() {
   });
   const [exampleSpeechIndex, setExampleSpeechIndex] = useState(null);
   const [activeExampleIndex, setActiveExampleIndex] = useState(null);
+  const reviewLockRef = useRef(false);
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState(null);
 
   const currentCard = cards[0];
   const currentCardId = currentCard?._id;
@@ -676,6 +688,12 @@ function App() {
   }, [isStudyTab]);
 
   const handleReview = useCallback(async (id, quality) => {
+    if (reviewLockRef.current) return;
+
+    reviewLockRef.current = true;
+    setIsReviewing(true);
+    setReviewError(null);
+
     try {
       const res = await axios.put(`${API_URL}/${id}/review`, { quality });
       const updatedCard = res.data.card || (res.data._id ? res.data : null);
@@ -709,9 +727,15 @@ function App() {
         setSessionMilestone(newMilestone);
       }
     } catch (error) {
-      console.error("Error reviewing card:", error);
+      setReviewError({
+        cardId: id,
+        message: getReviewErrorMessage(error),
+      });
+    } finally {
+      reviewLockRef.current = false;
+      setIsReviewing(false);
     }
-  }, [recordStudyReview, reviewMode, setIsCardFlipped]);
+  }, [recordStudyReview, reviewMode, setIsCardFlipped, setIsReviewing, setReviewError]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -731,7 +755,8 @@ function App() {
         ['review', 'new', 'retry'].includes(activeTab) &&
         currentCard &&
         !loading &&
-        !loadError;
+        !loadError &&
+        !isReviewing;
 
       if (!canUseReviewShortcuts) return;
 
@@ -804,6 +829,7 @@ function App() {
     handleReview,
     isCardEditing,
     isCardFlipped,
+    isReviewing,
     loadError,
     loading,
     setIsCardEditing,
@@ -1011,6 +1037,12 @@ function App() {
                     isPronunciationVisible={isPronunciationVisible}
                     onTogglePronunciation={toggleCurrentCardPronunciation}
                     onReview={handleReview}
+                    isReviewing={isReviewing}
+                    reviewError={
+                      reviewError?.cardId === currentCard._id
+                        ? reviewError.message
+                        : ''
+                    }
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     reviewMode={reviewMode}

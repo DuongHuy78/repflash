@@ -25,6 +25,8 @@ const ReviewCard = ({
   isPronunciationVisible,
   onTogglePronunciation,
   onReview,
+  isReviewing = false,
+  reviewError = '',
   onEdit,
   onDelete,
   reviewMode = 'main', // 'main' | 'retry' | 'new'
@@ -50,6 +52,7 @@ const ReviewCard = ({
 
   const handleScore = (e, score) => {
     e.stopPropagation();
+    if (isReviewing) return;
     onReview(card._id, score);
   };
 
@@ -308,17 +311,18 @@ const ReviewCard = ({
       </div>
 
       {isFlipped && !isEditing && (
-        <div className="review-controls">
+        <>
+          <div className="review-controls" aria-busy={isReviewing}>
           {reviewMode === 'retry' ? (
             // Chế độ bò nhai cỏ: chỉ 2 nút
             <>
-              <button className="btn btn-danger review-score" onClick={(e) => handleScore(e, 1)} title="Chưa nhớ" aria-keyshortcuts="A">
+              <button type="button" className="btn btn-danger review-score" onClick={(e) => handleScore(e, 1)} title="Chưa nhớ" aria-keyshortcuts="A" disabled={isReviewing}>
                 <span className="review-score__icon" aria-hidden="true"><RotateCcw size={20} /></span>
                 <span className="review-score__label review-score__label--desktop">Chưa nhớ (Again)</span>
                 <span className="review-score__label review-score__label--mobile">Chưa nhớ</span>
                 <span className="review-score__shortcut" aria-hidden="true">A</span>
               </button>
-              <button className="btn btn-success review-score" onClick={(e) => handleScore(e, 3)} title="Đã nhớ" aria-keyshortcuts="F">
+              <button type="button" className="btn btn-success review-score" onClick={(e) => handleScore(e, 3)} title="Đã nhớ" aria-keyshortcuts="F" disabled={isReviewing}>
                 <span className="review-score__icon" aria-hidden="true"><CheckCheck size={21} /></span>
                 <span className="review-score__label review-score__label--desktop">Đã nhớ (Good)</span>
                 <span className="review-score__label review-score__label--mobile">Đã nhớ</span>
@@ -328,25 +332,25 @@ const ReviewCard = ({
           ) : (
             // Chế độ ôn tập chính: 4 nút
             <>
-              <button className="btn btn-danger review-score" onClick={(e) => handleScore(e, 1)} title="Lại" aria-keyshortcuts="A">
+              <button type="button" className="btn btn-danger review-score" onClick={(e) => handleScore(e, 1)} title="Lại" aria-keyshortcuts="A" disabled={isReviewing}>
                 <span className="review-score__icon" aria-hidden="true"><RotateCcw size={20} /></span>
                 <span className="review-score__label review-score__label--desktop">Lại (Again)</span>
                 <span className="review-score__label review-score__label--mobile">Lại</span>
                 <span className="review-score__shortcut" aria-hidden="true">A</span>
               </button>
-              <button className="btn btn-warning review-score" onClick={(e) => handleScore(e, 2)} title="Khó" aria-keyshortcuts="S">
+              <button type="button" className="btn btn-warning review-score" onClick={(e) => handleScore(e, 2)} title="Khó" aria-keyshortcuts="S" disabled={isReviewing}>
                 <span className="review-score__icon" aria-hidden="true"><Brain size={21} /></span>
                 <span className="review-score__label review-score__label--desktop">Khó (Hard)</span>
                 <span className="review-score__label review-score__label--mobile">Khó</span>
                 <span className="review-score__shortcut" aria-hidden="true">S</span>
               </button>
-              <button className="btn btn-info review-score" onClick={(e) => handleScore(e, 3)} title="Tốt" aria-keyshortcuts="D">
+              <button type="button" className="btn btn-info review-score" onClick={(e) => handleScore(e, 3)} title="Tốt" aria-keyshortcuts="D" disabled={isReviewing}>
                 <span className="review-score__icon" aria-hidden="true"><ThumbsUp size={21} /></span>
                 <span className="review-score__label review-score__label--desktop">Tốt (Good)</span>
                 <span className="review-score__label review-score__label--mobile">Tốt</span>
                 <span className="review-score__shortcut" aria-hidden="true">D</span>
               </button>
-              <button className="btn btn-success review-score" onClick={(e) => handleScore(e, 4)} title="Dễ" aria-keyshortcuts="F">
+              <button type="button" className="btn btn-success review-score" onClick={(e) => handleScore(e, 4)} title="Dễ" aria-keyshortcuts="F" disabled={isReviewing}>
                 <span className="review-score__icon" aria-hidden="true"><Zap size={21} /></span>
                 <span className="review-score__label review-score__label--desktop">Dễ (Easy)</span>
                 <span className="review-score__label review-score__label--mobile">Dễ</span>
@@ -354,7 +358,18 @@ const ReviewCard = ({
               </button>
             </>
           )}
-        </div>
+          </div>
+          {isReviewing && (
+            <p className="review-feedback" role="status">
+              Đang lưu đánh giá…
+            </p>
+          )}
+          {reviewError && (
+            <p className="review-feedback review-feedback--error" role="alert">
+              {reviewError}
+            </p>
+          )}
+        </>
       )}
     </div>
   );

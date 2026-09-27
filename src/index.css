@@ -713,6 +713,16 @@ h1 {
   animation: slideUp 0.5s ease forwards;
 }
 
+.review-feedback {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.review-feedback--error {
+  color: var(--color-danger);
+}
+
 @keyframes slideUp {
   to {
     opacity: 1;
