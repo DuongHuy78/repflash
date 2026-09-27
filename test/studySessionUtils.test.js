@@ -1,5 +1,4 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { assert, test } from 'vitest';
 import {
   STUDY_MODE,
   STUDY_SESSION_STATUS,
@@ -165,4 +164,36 @@ test('hàng đợi có thẻ mới sau completion bắt đầu một session m�
   assert.equal(restarted.status, STUDY_SESSION_STATUS.ACTIVE);
   assert.equal(restarted.initialCardCount, 2);
   assert.equal(restarted.attemptCount, 0);
+});
+
+test('quality ngoài phạm vi không làm thay đổi state', () => {
+  const initial = createStudySessionState({
+    deckId: 'deck-1',
+    mode: STUDY_MODE.MAIN,
+    cardCount: 2,
+  });
+
+  assert.equal(recordReview(initial, 0), initial);
+  assert.equal(recordReview(initial, 5), initial);
+  assert.equal(recordReview(initial, Number.NaN), initial);
+});
+
+test('review khi session chưa active không làm thay đổi state', () => {
+  const initial = createStudySessionState({
+    deckId: 'deck-1',
+    mode: STUDY_MODE.MAIN,
+    cardCount: 0,
+  });
+
+  assert.equal(recordReview(initial, 3), initial);
+});
+
+test('action không xác định trả lại state cũ', () => {
+  const initial = createStudySessionState({
+    deckId: 'deck-1',
+    mode: STUDY_MODE.MAIN,
+    cardCount: 2,
+  });
+
+  assert.equal(studySessionReducer(initial, { type: 'UNKNOWN_ACTION' }), initial);
 });

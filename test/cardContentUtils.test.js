@@ -1,5 +1,4 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { assert, test } from 'vitest';
 import {
   IMPORT_MAX_COLUMNS,
   buildAiPrompt,
@@ -249,7 +248,7 @@ test('buildAiPrompt: tạo prompt chuẩn kèm ngôn ngữ học phần', () => 
   assert.match(jaPrompt, /ja-JP/);
   assert.match(jaPrompt, /Từ vựng \| Nghĩa tiếng Việt \| Cách đọc \| Câu ví dụ \| Nghĩa ví dụ \| Nội dung TTS ví dụ/);
   assert.match(jaPrompt, /Kana/);
-  assert.doesNotMatch(jaPrompt, /chính xác sáu cột/);
+  assert.notMatch(jaPrompt, /chính xác sáu cột/);
   assert.match(jaPrompt, /6\/9\/12\/15/);
   assert.match(jaPrompt, /4 ví dụ/);
 
@@ -265,7 +264,7 @@ test('buildAiPrompt: tiếng Nhật có quy tắc âm Hán tự và gộp thẻ 
   assert.match(jaPrompt, /GIÁC NGỘ/);
   assert.match(jaPrompt, /GỘP MỘT THẺ/);
   assert.match(jaPrompt, / ; /);
-  assert.doesNotMatch(jaPrompt, /TÁCH THÀNH CÁC DÒNG THẺ RIÊNG BIỆT/);
+  assert.notMatch(jaPrompt, /TÁCH THÀNH CÁC DÒNG THẺ RIÊNG BIỆT/);
   assert.match(jaPrompt, /khác cách đọc/i);
 
   const enPrompt = buildAiPrompt('en-US');
@@ -313,7 +312,7 @@ test('parseBulkImportText: không có chú thích thì không thêm dòng chú �
   assert.equal(result.errors.length, 0);
   assert.equal(result.cards.length, 1);
   assert.equal(result.cards[0].back, 'Quả táo.');
-  assert.doesNotMatch(result.cards[0].back, /chú ý:/);
+  assert.notMatch(result.cards[0].back, /chú ý:/);
   assert.equal(result.cards[0].examples[0].text, 'She eats an apple\\nevery day.');
 });
 
