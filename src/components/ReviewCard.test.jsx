@@ -11,6 +11,14 @@ const card = {
   examples: [],
 };
 
+const cardWithExamples = {
+  ...card,
+  examples: [
+    { text: '覚悟を決める。', translation: 'Hạ quyết tâm.', ttsText: 'かくごをきめる。' },
+    { text: '覚悟はいいか。', translation: 'Sẵn sàng chưa?', ttsText: 'かくごはいいか。' },
+  ],
+};
+
 const renderReviewCard = (props = {}) => {
   const onReview = vi.fn();
 
@@ -75,4 +83,87 @@ test('lỗi review được công bố cho người dùng', () => {
   renderReviewCard({ reviewError: 'Không thể lưu đánh giá.' });
 
   expect(screen.getByRole('alert')).toHaveTextContent('Không thể lưu đánh giá.');
+});
+
+test('không tự cuộn xuống ví dụ khi thẻ chưa lật dù activeExampleIndex khác null', () => {
+  const scrollIntoViewSpy = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
+
+  renderReviewCard({
+    card: cardWithExamples,
+    isFlipped: false,
+    activeExampleIndex: 0,
+  });
+
+  expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+});
+
+test('đặt lại vị trí cuộn mặt sau về đầu khi lật sang mặt sau', () => {
+  const { rerender } = render(
+    <ReviewCard
+      card={cardWithExamples}
+      isFlipped
+      setIsFlipped={vi.fn()}
+      isEditing={false}
+      setIsEditing={vi.fn()}
+      isPronunciationVisible={false}
+      onTogglePronunciation={vi.fn()}
+      onReview={vi.fn()}
+      onEdit={vi.fn()}
+      onDelete={vi.fn()}
+      onSpeakCard={vi.fn()}
+      onSpeakExample={vi.fn()}
+    />,
+  );
+
+  const answerContent = document.querySelector('.flashcard-content--answer');
+  answerContent.scrollTop = 180;
+
+  rerender(
+    <ReviewCard
+      card={cardWithExamples}
+      isFlipped={false}
+      setIsFlipped={vi.fn()}
+      isEditing={false}
+      setIsEditing={vi.fn()}
+      isPronunciationVisible={false}
+      onTogglePronunciation={vi.fn()}
+      onReview={vi.fn()}
+      onEdit={vi.fn()}
+      onDelete={vi.fn()}
+      onSpeakCard={vi.fn()}
+      onSpeakExample={vi.fn()}
+    />,
+  );
+  rerender(
+    <ReviewCard
+      card={cardWithExamples}
+      isFlipped
+      setIsFlipped={vi.fn()}
+      isEditing={false}
+      setIsEditing={vi.fn()}
+      isPronunciationVisible={false}
+      onTogglePronunciation={vi.fn()}
+      onReview={vi.fn()}
+      onEdit={vi.fn()}
+      onDelete={vi.fn()}
+      onSpeakCard={vi.fn()}
+      onSpeakExample={vi.fn()}
+    />,
+  );
+
+  expect(answerContent.scrollTop).toBe(0);
+});
+
+test('cuộn tới ví dụ đang đọc khi đã lật mặt sau', () => {
+  const scrollIntoViewSpy = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
+
+  renderReviewCard({
+    card: cardWithExamples,
+    isFlipped: true,
+    activeExampleIndex: 1,
+  });
+
+  expect(scrollIntoViewSpy).toHaveBeenCalledOnce();
+  expect(scrollIntoViewSpy.mock.instances[0]).toHaveAttribute('aria-current', 'true');
+  expect(scrollIntoViewSpy.mock.instances[0]).toHaveTextContent('覚悟はいいか。');
 });

@@ -19,6 +19,15 @@ export const getAvailableLanguages = () => {
 };
 
 let speakGeneration = 0;
+let activeUtterance = null;
+
+export const cancelSpeech = () => {
+  speakGeneration += 1;
+  activeUtterance = null;
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+};
 
 // 2. Hàm phát âm tiện ích (dùng chung cho cả App.jsx và ReviewCard.jsx)
 export const speakText = (text, lang = 'en-US', { onEnd } = {}) => {
@@ -28,9 +37,13 @@ export const speakText = (text, lang = 'en-US', { onEnd } = {}) => {
   const generation = ++speakGeneration;
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = lang;
+  activeUtterance = utterance;
 
   const finish = () => {
     if (generation !== speakGeneration) return;
+    if (activeUtterance === utterance) {
+      activeUtterance = null;
+    }
     onEnd?.();
   };
   utterance.onend = finish;

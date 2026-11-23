@@ -10,7 +10,7 @@ import ManageCards from './components/ManageCards';
 import AddCardsPanel from './components/AddCardsPanel';
 import AuthPage from './components/AuthPage'; // <--- Import trang Đăng nhập
 import QUOTES from './quotes.json';
-import { speakText, getAvailableLanguages } from './utils/speechUtils';
+import { speakText, cancelSpeech, getAvailableLanguages } from './utils/speechUtils';
 import { getExampleSpeechText, getSpeakableExamples, getStudySpeech } from './utils/cardContentUtils';
 import useStudySession from './hooks/useStudySession';
 import HelpModal from './components/HelpModal';
@@ -56,6 +56,31 @@ const isTypingTarget = (target) => {
 const resolveStateUpdate = (nextValue, currentValue) =>
   typeof nextValue === 'function' ? nextValue(currentValue) : nextValue;
 
+const INITIAL_CARD_UI_STATE = {
+  cardId: null,
+  isFlipped: false,
+  isEditing: false,
+  isPronunciationVisible: false,
+  exampleSpeechIndex: null,
+  activeExampleIndex: null,
+};
+
+// Chuẩn hóa state UI theo card hiện tại để đổi thẻ là xóa trạng thái thẻ cũ ngay lúc render.
+const normalizeCardUiState = (state, cardId, defaultPronunciationVisible) => {
+  const isCurrent = Boolean(cardId) && state.cardId === cardId;
+
+  return {
+    cardId: cardId ?? null,
+    isFlipped: isCurrent ? state.isFlipped : false,
+    isEditing: isCurrent ? state.isEditing : false,
+    isPronunciationVisible: isCurrent
+      ? state.isPronunciationVisible
+      : defaultPronunciationVisible,
+    exampleSpeechIndex: isCurrent && state.isFlipped ? state.exampleSpeechIndex : null,
+    activeExampleIndex: isCurrent && state.isFlipped ? state.activeExampleIndex : null,
+  };
+};
+
 const getReviewErrorMessage = (error) => {
   const responseData = error.response?.data;
 
@@ -78,6 +103,7 @@ function App() {
   const [guideDismissed, setGuideDismissed] = useState(false);
   const [decksLoaded, setDecksLoaded] = useState(false);
   const [cards, setCards] = useState([]);
+  const [cardUiState, setCardUiState] = useState(INITIAL_CARD_UI_STATE);
   const [decks, setDecks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -129,6 +155,7 @@ function App() {
     setIsFullscreenFlow(false);
     setGuideDismissed(false);
     setDecksLoaded(false);
+    setCardUiState(INITIAL_CARD_UI_STATE);
     setCards([]);
     setRetryCardsCount(0);
     setSessionMilestone(null);
@@ -357,14 +384,6 @@ function App() {
   // Quote state
   const [currentQuote, setCurrentQuote] = useState(() => QUOTES[Math.floor(Math.random() * QUOTES.length)]);
 
-  const [cardUiState, setCardUiState] = useState({
-    cardId: null,
-    isFlipped: false,
-    isEditing: false,
-    isPronunciationVisible: false,
-  });
-  const [exampleSpeechIndex, setExampleSpeechIndex] = useState(null);
-  const [activeExampleIndex, setActiveExampleIndex] = useState(null);
   const reviewLockRef = useRef(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [reviewError, setReviewError] = useState(null);
@@ -406,17 +425,60 @@ function App() {
     !loadError &&
     (cards.length > 0 || isStudyCompleted)
   );
-  const isCurrentCardUiState = cardUiState.cardId === currentCardId;
+  const isCurrentCardUiState = Boolean(currentCardId) && cardUiState.cardId === currentCardId;
   const isCardFlipped = isCurrentCardUiState ? cardUiState.isFlipped : false;
   const isCardEditing = isCurrentCardUiState ? cardUiState.isEditing : false;
   const isPronunciationVisible = isCurrentCardUiState
     ? cardUiState.isPronunciationVisible
     : defaultPronunciationVisible;
+  const exampleSpeechIndex = isCurrentCardUiState && isCardFlipped
+    ? cardUiState.exampleSpeechIndex
+    : null;
+  const activeExampleIndex = isCurrentCardUiState && isCardFlipped
+    ? cardUiState.activeExampleIndex
+    : null;
+
+  useEffect(() => () => {
+    cancelSpeech();
+  }, [currentCardId, isStudyTab]);
 
   useEffect(() => {
-    setExampleSpeechIndex(null);
-    setActiveExampleIndex(null);
-  }, [currentCardId, isCardFlipped]);
+    if (!isCardFlipped) return undefined;
+    return () => {
+      cancelSpeech();
+    };
+  }, [isCardFlipped]);
+
+  useEffect(() => {
+    if (isCardEditing) {
+      cancelSpeech();
+    }
+  }, [isCardEditing]);
+
+  const startCardSpeech = useCallback((text, selectedIndex, spokenIndex) => {
+    if (!currentCardId) return;
+    const spokenCardId = currentCardId;
+
+    speakText(text, currentDeckLanguage, {
+      onEnd: () => {
+        if (spokenIndex == null) return;
+        setCardUiState((state) => (
+          state.cardId === spokenCardId && state.activeExampleIndex === spokenIndex
+            ? { ...state, activeExampleIndex: null }
+            : state
+        ));
+      },
+    });
+
+    setCardUiState((state) => {
+      const base = normalizeCardUiState(state, spokenCardId, defaultPronunciationVisible);
+      return {
+        ...base,
+        exampleSpeechIndex: base.isFlipped ? selectedIndex : null,
+        activeExampleIndex: base.isFlipped ? spokenIndex : null,
+      };
+    });
+  }, [currentCardId, currentDeckLanguage, defaultPronunciationVisible]);
 
   const speakForCurrentFace = useCallback((advance = false) => {
     if (!currentCard) return;
@@ -429,71 +491,45 @@ function App() {
       advance: advance === true,
     });
 
-    speakText(payload.text, currentDeckLanguage, {
-      onEnd: () => {
-        if (payload.spokenIndex == null) return;
-        setActiveExampleIndex((current) => (
-          current === payload.spokenIndex ? null : current
-        ));
-      },
-    });
-    setExampleSpeechIndex(payload.selectedIndex);
-    setActiveExampleIndex(payload.spokenIndex);
-  }, [currentCard, currentDeckLanguage, exampleSpeechIndex, isCardFlipped]);
+    startCardSpeech(payload.text, payload.selectedIndex, payload.spokenIndex);
+  }, [currentCard, currentDeckLanguage, exampleSpeechIndex, isCardFlipped, startCardSpeech]);
 
   const speakExampleAt = useCallback((example, index) => {
-    speakText(getExampleSpeechText(example), currentDeckLanguage, {
-      onEnd: () => {
-        setActiveExampleIndex((current) => (current === index ? null : current));
-      },
-    });
-    setExampleSpeechIndex(index);
-    setActiveExampleIndex(index);
-  }, [currentDeckLanguage]);
+    startCardSpeech(getExampleSpeechText(example), index, index);
+  }, [startCardSpeech]);
 
   const setIsCardFlipped = useCallback((nextValue) => {
     setCardUiState((state) => {
-      const isCurrent = state.cardId === currentCardId;
-      const currentFlipped = isCurrent ? state.isFlipped : false;
+      const base = normalizeCardUiState(state, currentCardId, defaultPronunciationVisible);
+      const nextFlipped = resolveStateUpdate(nextValue, base.isFlipped);
 
       return {
-        cardId: currentCardId,
-        isFlipped: resolveStateUpdate(nextValue, currentFlipped),
-        isEditing: isCurrent ? state.isEditing : false,
-        isPronunciationVisible: isCurrent
-          ? state.isPronunciationVisible
-          : defaultPronunciationVisible,
+        ...base,
+        isFlipped: nextFlipped,
+        exampleSpeechIndex: nextFlipped ? base.exampleSpeechIndex : null,
+        activeExampleIndex: nextFlipped ? base.activeExampleIndex : null,
       };
     });
   }, [currentCardId, defaultPronunciationVisible]);
 
   const setIsCardEditing = useCallback((nextValue) => {
     setCardUiState((state) => {
-      const isCurrent = state.cardId === currentCardId;
-      const currentEditing = isCurrent ? state.isEditing : false;
+      const base = normalizeCardUiState(state, currentCardId, defaultPronunciationVisible);
 
       return {
-        cardId: currentCardId,
-        isFlipped: isCurrent ? state.isFlipped : false,
-        isEditing: resolveStateUpdate(nextValue, currentEditing),
-        isPronunciationVisible: isCurrent
-          ? state.isPronunciationVisible
-          : defaultPronunciationVisible,
+        ...base,
+        isEditing: resolveStateUpdate(nextValue, base.isEditing),
       };
     });
   }, [currentCardId, defaultPronunciationVisible]);
 
   const toggleCurrentCardPronunciation = useCallback(() => {
     setCardUiState((state) => {
-      const isCurrent = state.cardId === currentCardId;
+      const base = normalizeCardUiState(state, currentCardId, defaultPronunciationVisible);
 
       return {
-        cardId: currentCardId,
-        isFlipped: isCurrent ? state.isFlipped : false,
-        isEditing: isCurrent ? state.isEditing : false,
-        isPronunciationVisible: isCurrent
-          ? !state.isPronunciationVisible
-          : !defaultPronunciationVisible,
+        ...base,
+        isPronunciationVisible: !base.isPronunciationVisible,
       };
     });
   }, [currentCardId, defaultPronunciationVisible]);
@@ -622,6 +658,7 @@ function App() {
 
   const openReviewTab = useCallback(() => {
     setIsFullscreenFlow(false);
+    setCardUiState(INITIAL_CARD_UI_STATE);
     if (activeTab === 'review') fetchDueCards();
     else {
       setCards([]);
@@ -634,6 +671,7 @@ function App() {
 
   const openRetryTab = useCallback(() => {
     setIsFullscreenFlow(false);
+    setCardUiState(INITIAL_CARD_UI_STATE);
     if (activeTab === 'retry') fetchRetryCards();
     else {
       setCards([]);
@@ -646,6 +684,7 @@ function App() {
 
   const openNewTab = useCallback(() => {
     setIsFullscreenFlow(false);
+    setCardUiState(INITIAL_CARD_UI_STATE);
     if (activeTab === 'new') fetchNewCards();
     else {
       setCards([]);
@@ -658,6 +697,7 @@ function App() {
 
   const openManageTab = useCallback(() => {
     setIsFullscreenFlow(false);
+    setCardUiState(INITIAL_CARD_UI_STATE);
     setIsDeckDrawerOpen(false);
     setActiveTab('manage');
   }, []);
@@ -672,12 +712,14 @@ function App() {
 
   const openAddTab = useCallback((mode = 'manual') => {
     setIsFullscreenFlow(false);
+    setCardUiState(INITIAL_CARD_UI_STATE);
     setIsDeckDrawerOpen(false);
     setAddMode(mode);
     setActiveTab('add');
   }, []);
 
   const handleSelectDeck = useCallback((deckId) => {
+    setCardUiState(INITIAL_CARD_UI_STATE);
     if (isStudyTab) {
       setCards([]);
       setLoading(true);

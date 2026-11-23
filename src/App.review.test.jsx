@@ -21,9 +21,11 @@ vi.mock('axios', () => {
 });
 
 vi.mock('./components/DesktopAppShell', () => ({
-  default: ({ children, onOpenReview }) => (
+  default: ({ children, onOpenReview, onOpenNew, onOpenRetry }) => (
     <>
       <button type="button" onClick={onOpenReview}>Mở ôn tập</button>
+      <button type="button" onClick={onOpenNew}>Mở từ mới</button>
+      <button type="button" onClick={onOpenRetry}>Mở bò nhai cỏ</button>
       {children}
     </>
   ),
@@ -48,6 +50,68 @@ const card = {
   back: 'Quyết tâm',
   pronunciation: 'かくご',
   examples: [],
+};
+
+const cardWithExamples1 = {
+  _id: 'card-ex-1',
+  front: '覚悟',
+  back: 'Quyết tâm',
+  pronunciation: 'かくご',
+  examples: [
+    { text: '覚悟を決めて挑戦する。', translation: 'Quyết tâm thử thách.', ttsText: '' },
+    { text: '覚悟ができている。', translation: 'Đã sẵn sàng.', ttsText: '' },
+  ],
+};
+
+const cardWithExamples2 = {
+  _id: 'card-ex-2',
+  front: '努力',
+  back: 'Nỗ lực',
+  pronunciation: 'どりょく',
+  examples: [
+    { text: '毎日努力を続ける。', translation: 'Mỗi ngày tiếp tục nỗ lực.', ttsText: '' },
+    { text: '努力は裏切らない。', translation: 'Nỗ lực không phản bội bạn.', ttsText: '' },
+  ],
+};
+
+const originalSpeechSynthesisDescriptor = Object.getOwnPropertyDescriptor(window, 'speechSynthesis');
+const originalSpeechUtteranceDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'SpeechSynthesisUtterance');
+
+const installSpeechSynthesisMock = () => {
+  const speechMock = {
+    speak: vi.fn(),
+    cancel: vi.fn(),
+    getVoices: vi.fn(() => []),
+    onvoiceschanged: null,
+  };
+  Object.defineProperty(window, 'speechSynthesis', {
+    configurable: true,
+    writable: true,
+    value: speechMock,
+  });
+  globalThis.SpeechSynthesisUtterance = class MockUtterance {
+    constructor(text) {
+      this.text = text;
+      this.lang = '';
+      this.onend = null;
+      this.onerror = null;
+    }
+  };
+  return speechMock;
+};
+
+const restoreSpeechSynthesisMock = () => {
+  if (originalSpeechSynthesisDescriptor) {
+    Object.defineProperty(window, 'speechSynthesis', originalSpeechSynthesisDescriptor);
+  } else {
+    delete window.speechSynthesis;
+  }
+
+  if (originalSpeechUtteranceDescriptor) {
+    Object.defineProperty(globalThis, 'SpeechSynthesisUtterance', originalSpeechUtteranceDescriptor);
+  } else {
+    delete globalThis.SpeechSynthesisUtterance;
+  }
 };
 
 const createDeferred = () => {
@@ -99,6 +163,7 @@ beforeEach(() => {
 afterEach(() => {
   axios.get.mockReset();
   axios.put.mockReset();
+  restoreSpeechSynthesisMock();
 });
 
 test('double-click rating chỉ gửi một request review khi request đầu đang chờ', async () => {
@@ -145,4 +210,135 @@ test('lỗi review giữ nguyên thẻ, báo lỗi và cho phép thử lại', a
 
   await user.click(screen.getByRole('button', { name: /tốt/i }));
   expect(axios.put).toHaveBeenCalledTimes(2);
+});
+
+test('Ôn tập: đọc ví dụ thẻ trước chưa kết thúc vẫn không cuộn xuống ví dụ ở thẻ sau', async () => {
+  const speechMock = installSpeechSynthesisMock();
+  const scrollIntoViewSpy = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
+  axios.get.mockImplementation((url) => {
+    if (url === '/api/user/me') {
+      return Promise.resolve({ data: { _id: 'user-1', username: 'learner', currentStreak: 0 } });
+    }
+    if (url === '/api/decks') {
+      return Promise.resolve({ data: [deck] });
+    }
+    if (url === '/api/cards/retry') {
+      return Promise.resolve({ data: [] });
+    }
+    if (url === '/api/cards') {
+      return Promise.resolve({ data: [cardWithExamples1, cardWithExamples2] });
+    }
+    return Promise.reject(new Error(`Unexpected GET: ${url}`));
+  });
+  axios.put.mockResolvedValueOnce({ data: { card: { ...cardWithExamples1 }, currentStreak: 1 } });
+
+  const user = userEvent.setup();
+  render(<App />);
+
+  await user.click(screen.getByRole('button', { name: 'Mở ôn tập' }));
+  await user.click(await screen.findByRole('button', { name: 'Lật thẻ để xem nghĩa' }));
+
+  scrollIntoViewSpy.mockClear();
+  await user.keyboard('v');
+  expect(speechMock.speak).toHaveBeenCalledOnce();
+  expect(scrollIntoViewSpy).toHaveBeenCalledOnce();
+
+  scrollIntoViewSpy.mockClear();
+  speechMock.cancel.mockClear();
+  await user.click(screen.getByRole('button', { name: /tốt/i }));
+
+  expect(await screen.findAllByText('努力')).toHaveLength(2);
+  expect(speechMock.cancel).toHaveBeenCalled();
+  expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole('button', { name: 'Lật thẻ để xem nghĩa' }));
+  expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+  expect(document.querySelector('.flashcard-content--answer').scrollTop).toBe(0);
+  expect(document.querySelector('.flashcard-example[aria-current="true"]')).toBeNull();
+});
+
+test('Từ mới: đọc ví dụ thẻ trước rồi sang thẻ mới vẫn hiển thị mặt sau từ đầu', async () => {
+  installSpeechSynthesisMock();
+  const scrollIntoViewSpy = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
+  axios.get.mockImplementation((url) => {
+    if (url === '/api/user/me') {
+      return Promise.resolve({ data: { _id: 'user-1', username: 'learner', currentStreak: 0 } });
+    }
+    if (url === '/api/decks') {
+      return Promise.resolve({ data: [deck] });
+    }
+    if (url === '/api/cards/retry') {
+      return Promise.resolve({ data: [] });
+    }
+    if (url === '/api/cards/new') {
+      return Promise.resolve({
+        data: {
+          cards: [cardWithExamples1, cardWithExamples2],
+          limit: 20,
+          usedToday: 0,
+          remainingQuota: 20,
+          totalNew: 2,
+        },
+      });
+    }
+    return Promise.reject(new Error(`Unexpected GET: ${url}`));
+  });
+  axios.put.mockResolvedValueOnce({ data: { card: { ...cardWithExamples1 }, currentStreak: 1 } });
+
+  const user = userEvent.setup();
+  render(<App />);
+
+  await user.click(screen.getByRole('button', { name: 'Mở từ mới' }));
+  await user.click(await screen.findByRole('button', { name: 'Lật thẻ để xem nghĩa' }));
+
+  await user.keyboard('v');
+  scrollIntoViewSpy.mockClear();
+
+  await user.click(screen.getByRole('button', { name: /tốt/i }));
+  expect(await screen.findAllByText('努力')).toHaveLength(2);
+  expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole('button', { name: 'Lật thẻ để xem nghĩa' }));
+  expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+  expect(document.querySelector('.flashcard-content--answer').scrollTop).toBe(0);
+  expect(document.querySelector('.flashcard-example[aria-current="true"]')).toBeNull();
+});
+
+test('Bò nhai cỏ còn 1 thẻ: bấm Chưa nhớ rồi lật lại vẫn về đầu mặt sau và xóa highlight ví dụ', async () => {
+  const speechMock = installSpeechSynthesisMock();
+  const scrollIntoViewSpy = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
+  axios.get.mockImplementation((url) => {
+    if (url === '/api/user/me') {
+      return Promise.resolve({ data: { _id: 'user-1', username: 'learner', currentStreak: 0 } });
+    }
+    if (url === '/api/decks') {
+      return Promise.resolve({ data: [deck] });
+    }
+    if (url === '/api/cards/retry') {
+      return Promise.resolve({ data: [cardWithExamples1] });
+    }
+    return Promise.reject(new Error(`Unexpected GET: ${url}`));
+  });
+  axios.put.mockResolvedValueOnce({ data: { card: { ...cardWithExamples1 }, currentStreak: 1 } });
+
+  const user = userEvent.setup();
+  render(<App />);
+
+  await user.click(screen.getByRole('button', { name: 'Mở bò nhai cỏ' }));
+  await user.click(await screen.findByRole('button', { name: 'Lật thẻ để xem nghĩa' }));
+
+  await user.keyboard('v');
+  const answerContent = document.querySelector('.flashcard-content--answer');
+  answerContent.scrollTop = 160;
+  scrollIntoViewSpy.mockClear();
+  speechMock.cancel.mockClear();
+
+  await user.click(screen.getByRole('button', { name: /chưa nhớ/i }));
+  expect(speechMock.cancel).toHaveBeenCalled();
+  expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+
+  await user.click(await screen.findByRole('button', { name: 'Lật thẻ để xem nghĩa' }));
+  expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+  expect(document.querySelector('.flashcard-content--answer').scrollTop).toBe(0);
+  expect(document.querySelector('.flashcard-example[aria-current="true"]')).toBeNull();
 });

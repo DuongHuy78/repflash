@@ -37,6 +37,7 @@ const ReviewCard = ({
   const [editFront, setEditFront] = useState(card.front);
   const [editBack, setEditBack] = useState(card.back);
   const activeExampleRef = useRef(null);
+  const answerContentRef = useRef(null);
   const pronunciation = card.pronunciation?.trim() || '';
   const examples = getSpeakableExamples(card);
   const backSpeakLabel = examples.length > 0 ? 'Đọc ví dụ' : 'Đọc từ vựng';
@@ -62,12 +63,17 @@ const ReviewCard = ({
   };
 
   useEffect(() => {
-    if (activeExampleIndex == null) return;
+    if (!isFlipped || !answerContentRef.current) return;
+    answerContentRef.current.scrollTop = 0;
+  }, [card._id, isFlipped]);
+
+  useEffect(() => {
+    if (!isFlipped || isEditing || activeExampleIndex == null) return;
     const node = activeExampleRef.current;
     if (!node) return;
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     node.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
-  }, [activeExampleIndex]);
+  }, [activeExampleIndex, card._id, isEditing, isFlipped]);
 
   const handleSpeak = (e) => {
     e.stopPropagation();
@@ -257,7 +263,7 @@ const ReviewCard = ({
               </button>
             </div>
 
-            <div className="flashcard-content flashcard-content--answer">
+            <div className="flashcard-content flashcard-content--answer" ref={answerContentRef}>
               <header className="flashcard-answer__term">
                 <div className="flashcard-term">{card.front}</div>
                 {pronunciation && (
